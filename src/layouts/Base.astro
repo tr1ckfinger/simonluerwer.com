@@ -1,0 +1,528 @@
+---
+interface Props {
+  title?: string;
+  description?: string;
+  ogImage?: string;
+  albumHeader?: { title: string; backHref: string; count: number };
+  // When true, emits <meta name="robots" content="noindex, nofollow">
+  // so search engines skip this page even if they discover the URL
+  // (sitemap, accidental backlink, social share, etc.). Used for
+  // unlisted ("hidden"-tagged) series pages — the URL still works but
+  // shouldn't surface in Google results.
+  noindex?: boolean;
+}
+
+// Default SEO copy. Each page can override description / ogImage with
+// something more specific; the defaults catch the long tail.
+const DEFAULT_DESCRIPTION =
+  'Photography by Simon Lürwer — street photography, portraits, and personal projects from Hamburg, Germany. Fotografie aus Hamburg.';
+const DEFAULT_OG_IMAGE = 'https://simonluerwer.com/portrait.jpg';
+
+const {
+  title = 'simonluerwer.com',
+  description = DEFAULT_DESCRIPTION,
+  ogImage = DEFAULT_OG_IMAGE,
+  albumHeader,
+  noindex = false,
+} = Astro.props;
+
+const path = Astro.url.pathname.replace(/\/$/, '') || '/';
+const isHome = path === '/';
+const isAlbums = path === '/albums';
+const isProjects = path === '/projects';
+const isContact = path === '/contact';
+
+// Canonical URL — resolves against Astro.site (set in astro.config).
+// Falls back to the request URL if Astro.site isn't configured.
+const canonical = Astro.site
+  ? new URL(Astro.url.pathname, Astro.site).href
+  : Astro.url.href;
+
+// JSON-LD Person schema describing Simon as the site owner. Google
+// uses this to associate the site with a real person and surface
+// "Simon Lürwer" knowledge-panel-style results.
+const personSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'Person',
+  name: 'Simon Lürwer',
+  alternateName: 'Simon',
+  url: 'https://simonluerwer.com',
+  image: 'https://simonluerwer.com/portrait.jpg',
+  jobTitle: 'Photographer',
+  description:
+    'Photographer based in Hamburg, Germany. Street photography, portraits, and personal projects.',
+  address: {
+    '@type': 'PostalAddress',
+    addressLocality: 'Hamburg',
+    addressCountry: 'DE',
+  },
+  sameAs: ['https://instagram.com/tr1ckfinger'],
+};
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!-- The "-v2" suffix is a cache-bust: iOS Safari's OS-level favicon
+         database (shared with Spotlight / Siri suggestions) hung onto
+         an Astro-starter icon from an earlier deploy and refused to
+         re-fetch from the same URL even after Website Data was cleared.
+         Renaming the files forces a fresh fetch. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon-v2.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32-v2.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-v2.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="generator" content={Astro.generator} />
+    <!-- No <meta name="theme-color"> or <meta name="color-scheme">.
+         Safari iOS samples the page content directly to tint its
+         chrome; an explicit theme-color (especially one mutated on
+         toggle) appears to conflict with the content sample and
+         smear the chrome retint. frankmorlok.com omits both metas
+         and the chrome follows its background-color transition
+         frame-perfectly. -->
+    <title>{title}</title>
+
+    <!-- SEO: description is the single most important signal for
+         Google's snippet generation. Keywords meta is largely ignored
+         by Google in 2026 but still parsed by Bing / DuckDuckGo. -->
+    {noindex && (
+      <meta name="robots" content="noindex, nofollow" />
+    )}
+    <meta name="description" content={description} />
+    <meta name="author" content="Simon Lürwer" />
+    <meta
+      name="keywords"
+      content="Simon Lürwer, Photography Hamburg, Fotografie Hamburg, Foto Simon, Foto Winterhude, Street Photography Hamburg, Portrait Photography Hamburg, Fotograf Hamburg"
+    />
+    <link rel="canonical" href={canonical} />
+
+    <!-- Open Graph: link previews on iMessage, WhatsApp, Facebook,
+         LinkedIn, Slack, etc. og:image should be ≥1200×630px and an
+         absolute URL — Cloudinary transforms handle both. -->
+    <meta property="og:site_name" content="simonluerwer.com" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:locale:alternate" content="de_DE" />
+
+    <!-- Twitter Card: separate spec from OG but most platforms fall
+         back to OG. Specifying both maximises coverage. -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+
+    <!-- Structured data: tells Google "this site belongs to a real
+         photographer named Simon Lürwer based in Hamburg". Powers the
+         knowledge panel / rich result on name searches once Google
+         has crawled and verified. -->
+    <script
+      type="application/ld+json"
+      set:html={JSON.stringify(personSchema)}
+    />
+    <script is:inline>
+      (() => {
+        const saved = localStorage.getItem('theme');
+        const theme = saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.dataset.theme = theme;
+      })();
+    </script>
+  </head>
+  <body>
+    <header class="nav">
+      <div class="nav-inner">
+        <div class="nav-left">
+          {albumHeader ? (
+            <Fragment>
+              <a href={albumHeader.backHref} class="back-arrow" aria-label="Back">←</a>
+              <span class="brand">{albumHeader.title}</span>
+            </Fragment>
+          ) : (
+            <a href="/" class="brand">simon lürwer</a>
+          )}
+        </div>
+        <div class="nav-center">
+          {albumHeader && <span class="count">{albumHeader.count} images</span>}
+        </div>
+        <div class="nav-right">
+          <nav class="nav-links" aria-label="Primary">
+            <a href="/" data-label="imgs" class:list={['nav-link', { active: isHome }]}>imgs</a>
+            <a href="/albums" data-label="albms" class:list={['nav-link', { active: isAlbums }]}>albms</a>
+            <a href="/projects" data-label="prjcts" class:list={['nav-link', { active: isProjects }]}>prjcts</a>
+            <a href="/contact" data-label="cntct" class:list={['nav-link', { active: isContact }]}>cntct</a>
+          </nav>
+          <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme"></button>
+        </div>
+      </div>
+    </header>
+    <main>
+      <slot />
+    </main>
+    {albumHeader && (
+      <script is:inline>
+        // Album back-arrow: send the user back to whichever listing
+        // they came from (/ or /albums). Default href on the server
+        // is `/` for direct landings / no-JS fallback; here we
+        // override it when document.referrer says they arrived from
+        // /albums. On click we prefer history.back() so scroll
+        // position on the listing is preserved (and any session-
+        // scoped state like the home grid's shuffle stays intact).
+        (() => {
+          const arrow = document.querySelector('.back-arrow');
+          if (!arrow) return;
+          let referrerPath = null;
+          try {
+            if (document.referrer) {
+              const ref = new URL(document.referrer);
+              if (ref.origin === location.origin) {
+                referrerPath = ref.pathname.replace(/\/$/, '') || '/';
+              }
+            }
+          } catch {}
+          if (referrerPath === '/albums') arrow.href = '/albums';
+          else if (referrerPath === '/projects') arrow.href = '/projects';
+          else if (referrerPath === '/') arrow.href = '/';
+          arrow.addEventListener('click', (e) => {
+            if (referrerPath && history.length > 1) {
+              e.preventDefault();
+              history.back();
+            }
+          });
+        })();
+      </script>
+    )}
+    <script is:inline>
+      (() => {
+        const setTheme = (t) => {
+          document.documentElement.dataset.theme = t;
+          localStorage.setItem('theme', t);
+        };
+        const btn = document.getElementById('theme-toggle');
+        btn?.addEventListener('click', () => {
+          setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+        });
+        document.addEventListener('keydown', (e) => {
+          if (e.metaKey || e.ctrlKey || e.altKey) return;
+          const tag = (e.target && e.target.tagName) || '';
+          if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable) return;
+          if (e.key === 'd' || e.key === 'D') setTheme('dark');
+          if (e.key === 'l' || e.key === 'L') setTheme('light');
+        });
+
+        const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const playFade = (img) => {
+          img.classList.add('loaded');
+          if (reduceMotion || typeof img.animate !== 'function') return;
+          // The z-travel is on the tile now; per-image fade is pure
+          // opacity. WAAPI is still used (instead of a CSS transition)
+          // because Safari iOS skips transition interpolation on an
+          // <img> that hasn't painted a prior state.
+          img.animate(
+            [{ opacity: 0 }, { opacity: 1 }],
+            // 'backwards' keeps the start keyframe applied before play,
+            // and releases the animated value after play so :hover
+            // filter transitions on the image aren't pinned by WAAPI.
+            { duration: 1000, easing: 'ease-out', fill: 'backwards' }
+          );
+        };
+        const whenDecoded = (img, cb) => {
+          if (typeof img.decode === 'function') img.decode().then(cb, cb);
+          else cb();
+        };
+        const readyFor = (img) => new Promise((resolve) => {
+          if (img.complete && img.naturalWidth > 0) {
+            whenDecoded(img, resolve);
+          } else {
+            img.addEventListener('load', () => whenDecoded(img, resolve), { once: true });
+            img.addEventListener('error', () => resolve(), { once: true });
+          }
+        });
+        // Measure each drop-in tile's 2D distance from the grid center so
+        // tiles closer to the center travel less on the z-axis (smaller
+        // starting scale) and arrive sooner. Top-left and top-right of a
+        // symmetric grid resolve to the same distance, so they animate
+        // identically.
+        const tiles = Array.from(document.querySelectorAll('.drop-in'));
+        if (tiles.length) {
+          const rects = tiles.map((t) => t.getBoundingClientRect());
+          const cxs = rects.map((r) => r.left + r.width / 2);
+          const cys = rects.map((r) => r.top + r.height / 2);
+          const gridCx = (Math.min(...cxs) + Math.max(...cxs)) / 2;
+          const gridCy = (Math.min(...cys) + Math.max(...cys)) / 2;
+          const dists = rects.map((_, i) => Math.hypot(cxs[i] - gridCx, cys[i] - gridCy));
+          const maxD = Math.max(...dists) || 1;
+          tiles.forEach((tile, i) => {
+            const n = dists[i] / maxD; // 0 = center, 1 = furthest corner
+            // Scale lives on the tile again, so the range is bounded to
+            // what fits in the layout gap — adjacent corner tiles can
+            // both push outward at most ~5% each before they'd overlap
+            // on the tightest (mobile) breakpoint.
+            const scale = 1.03 + n * 0.07; // 1.03 → 1.10
+            const delay = n * 240;
+            tile.style.setProperty('--drop-scale', scale.toFixed(3));
+            tile.style.animationDelay = delay.toFixed(0) + 'ms';
+          });
+        }
+        requestAnimationFrame(() => document.body.classList.add('drop-ready'));
+
+        // Fade each image in the moment it's ready. Syncing across the
+        // whole grid doesn't work once loading="lazy" enters the picture —
+        // off-screen images never fire a load event until you scroll, so
+        // a Promise.all() gate would hang forever.
+        const imgs = Array.from(document.querySelectorAll('img.img-fade'));
+        imgs.forEach((img) => readyFor(img).then(() => playFade(img)));
+      })();
+    </script>
+    <style is:global>
+      :root,
+      :root[data-theme='light'] {
+        /* color-scheme tells Safari which system palette the page is
+           using — it's the other half of the "tint the chrome" story
+           alongside <meta name=\"theme-color\">. Without it set,
+           Safari ignores dynamic theme-color changes and keeps
+           tinting from its own heuristic. */
+        color-scheme: light;
+        --bg: #ffffff;
+        --fg: #111111;
+        --muted: #666666;
+        --card-bg: #e6e6e6;
+        --nav-bg: #ffffff;
+        --lightbox-bg: #ffffff;
+        --btn-bg: rgba(0, 0, 0, 0.06);
+        --btn-bg-hover: rgba(0, 0, 0, 0.12);
+        --img-hover: 0.85;
+      }
+      :root[data-theme='dark'] {
+        color-scheme: dark;
+        --bg: #0c0c0f;
+        --fg: #eaeaea;
+        --muted: #8a8a90;
+        --card-bg: #17171b;
+        --nav-bg: #0c0c0f;
+        --lightbox-bg: #0c0c0f;
+        --btn-bg: rgba(255, 255, 255, 0.08);
+        --btn-bg-hover: rgba(255, 255, 255, 0.16);
+        --img-hover: 1.18;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        /* Reserve space for the scrollbar gutter even when content
+           doesn't overflow yet — keeps the layout from shifting
+           horizontally when the lightbox toggles `body { overflow:
+           hidden }`. Supported in Chromium 94+, Firefox 97+, Safari
+           18.2+. The Lightbox script also pads the body by the
+           measured scrollbar width as a fallback for older Safari. */
+        scrollbar-gutter: stable;
+      }
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Helvetica Neue', Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        /* Matches frankmorlok.com's CSS: a simple 300ms ease-in-out
+           crossfade. Safari iOS's chrome lags slightly because it
+           convolves the sample with its own smoothing, but this is
+           the best pure-CSS match we've found. */
+        transition: background-color 300ms ease-in-out, color 300ms ease-in-out;
+      }
+      @keyframes drop-in {
+        0% {
+          opacity: 0;
+          transform: scale(var(--drop-scale, 1.08));
+          filter: blur(3px);
+        }
+        70% {
+          filter: blur(0);
+        }
+        100% {
+          opacity: 1;
+          transform: scale(1);
+          filter: blur(0);
+        }
+      }
+      .drop-in {
+        animation: drop-in 1200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        animation-play-state: paused;
+        transform-origin: center center;
+        will-change: transform, opacity, filter;
+      }
+      body.drop-ready .drop-in {
+        animation-play-state: running;
+      }
+      .img-fade {
+        opacity: 0;
+        will-change: opacity, filter, transform;
+      }
+      .img-fade.loaded {
+        opacity: 1;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .drop-in { animation: none; }
+        .img-fade { opacity: 1; }
+      }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+      .nav {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        /* Opaque fill matching the body. backdrop-filter is
+           intentionally omitted: a transparent/blurred sticky header
+           on iOS 26 Safari freezes the chrome tint on theme toggle
+           (sampling + compositor quirk confirmed by other devs). A
+           solid nav that matches --bg lets the chrome flip in step
+           with the body on toggle. Same 300ms crossfade as the body
+           so the surfaces retint together. */
+        background: var(--nav-bg);
+        transition: background-color 300ms ease-in-out;
+      }
+      .nav-inner {
+        /* Full-width nav: the inner row inherits the same horizontal
+           rhythm as <main> so the brand on the left and the links on
+           the right line up with the grid edges. No max-width — the
+           nav stretches the full viewport, padding does the spacing. */
+        /* safe-area-inset-top pushes the nav content below the iOS
+           notch/status bar now that viewport-fit=cover extends the
+           page background all the way to the device edge. Horizontal
+           insets cover landscape notches. */
+        padding: calc(20px + env(safe-area-inset-top)) calc(80px + env(safe-area-inset-right)) 20px calc(80px + env(safe-area-inset-left));
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
+        gap: 16px;
+      }
+      .nav-left {
+        position: relative;
+        display: flex;
+        align-items: center;
+        min-width: 0;
+      }
+      .nav-center {
+        justify-self: center;
+        color: var(--muted);
+        font-size: 14px;
+      }
+      .nav-right {
+        justify-self: end;
+        display: flex;
+        align-items: center;
+        gap: 22px;
+      }
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        font-size: 14px;
+      }
+      .nav-link {
+        color: var(--muted);
+        transition: color 150ms ease;
+        letter-spacing: -0.005em;
+        white-space: nowrap;
+      }
+      .nav-link:hover {
+        color: var(--fg);
+      }
+      /* The active link stays at font-weight 400 so its glyph metrics
+         (and therefore the link's box width) never change — a bumped
+         font-weight would reflow the neighbours even with a reserved-
+         width pseudo-element, because the font stack's 500 variant
+         advances slightly differently. Instead, a two-axis text-shadow
+         of currentColor fakes the added weight visually: the shadow
+         adds paint, not layout. */
+      .nav-link.active {
+        color: var(--fg);
+        text-shadow:
+          0.3px 0 0 currentColor,
+          -0.3px 0 0 currentColor;
+      }
+      .brand {
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        font-size: 15px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .back-arrow {
+        position: absolute;
+        right: calc(100% + 20px);
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--fg);
+        font-size: 18px;
+        line-height: 1;
+        font-weight: 400;
+        transition: opacity 150ms ease;
+      }
+      .back-arrow:hover {
+        opacity: 0.6;
+      }
+      .theme-toggle {
+        width: 12px;
+        height: 12px;
+        border-radius: 999px;
+        border: none;
+        padding: 0;
+        background: var(--fg);
+        cursor: pointer;
+        transition: background 200ms ease, transform 200ms ease;
+      }
+      .theme-toggle:hover {
+        transform: scale(1.08);
+      }
+      main {
+        /* Full-width on desktop with 80px L/R breathing room. No
+           max-width — the grid expands to fill the viewport so the
+           images themselves get bigger, not the count per row. */
+        padding: 0 80px 80px;
+      }
+      @media (max-width: 1100px) {
+        /* Tighten the side rails as the viewport narrows so 80px
+           doesn't eat too much of a smaller screen. */
+        .nav-inner {
+          padding: calc(20px + env(safe-area-inset-top)) calc(40px + env(safe-area-inset-right)) 20px calc(40px + env(safe-area-inset-left));
+        }
+        main { padding: 0 40px 80px; }
+      }
+      @media (max-width: 640px) {
+        /* Let the right column size to its content so the links and
+           toggle always sit flush against the right edge; the brand
+           gets whatever space is left and truncates with an ellipsis
+           if the viewport is too narrow. The 1fr ensures there's
+           always a gap between the brand and the first nav link. */
+        .nav-inner {
+          /* Same safe-area treatment as desktop but with the tighter
+             mobile base paddings (16px all around). */
+          padding: calc(16px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) 16px calc(16px + env(safe-area-inset-left));
+          gap: 12px;
+          grid-template-columns: minmax(0, 1fr) auto auto;
+        }
+        main { padding: 0 16px 48px; }
+        .nav-left { gap: 12px; }
+        .back-arrow {
+          position: static;
+          transform: none;
+        }
+        .nav-right { gap: 14px; }
+        .nav-links { gap: 12px; font-size: 14px; }
+        /* Album count hides on narrow screens so the nav links and
+           album title both have room to breathe. */
+        .nav-center { display: none; }
+        .brand { font-size: 14px; }
+      }
+    </style>
+  </body>
+</html>

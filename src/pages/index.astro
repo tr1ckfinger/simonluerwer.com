@@ -1,0 +1,184 @@
+---
+import Base from '../layouts/Base.astro';
+import Lightbox from '../components/Lightbox.astro';
+import { getAlbums, cldUrl, albumHref, albumLabel } from '../lib/cloudinary';
+
+const albums = await getAlbums();
+
+// Flat list of every image across BOTH categories (albums + projects).
+// Each entry carries the URL of, and the "Go to album / Go to project"
+// label for, the series it belongs to — used by the lightbox to render
+// the pill that links from a single image back to its parent series.
+type Item = {
+  public_id: string;
+  width: number;
+  height: number;
+  albumHref: string;
+  albumLabel: string;
+};
+
+const all: Item[] = [];
+for (const album of albums) {
+  // Skip hidden albums — they shouldn't appear in the flat home feed,
+  // even though their /<category>/<slug> page still works directly.
+  if (album.hidden) continue;
+  const href = albumHref(album);
+  const label = albumLabel(album);
+  for (const img of album.images) {
+    all.push({
+      public_id: img.public_id,
+      width: img.width,
+      height: img.height,
+      albumHref: href,
+      albumLabel: label,
+    });
+  }
+}
+
+// Order is randomized client-side so it persists across refreshes within
+// the same tab (session) and only resets when a new session starts.
+// See the inline shuffle script below.
+
+// SEO: derive an Open Graph image from the freshest album's cover. The
+// `albums` list comes back sorted newest-first, so albums[0].cover is
+// the most recently updated work — keeps the link preview fresh as new
+// series go up.
+const ogImage =
+  albums.length > 0
+    ? cldUrl(albums[0].cover.public_id, {
+        w: 1200,
+        h: 630,
+        crop: 'fill',
+        q: 'auto:best',
+      })
+    : undefined;
+
+const description =
+  'Photography by Simon Lürwer — street photography, portraits, and personal projects from Hamburg, Germany. Fotografie aus Hamburg.';
+---
+
+<Base
+  title="Simon Lürwer · Photography from Hamburg"
+  description={description}
+  ogImage={ogImage}
+>
+  <section class="justified">
+    {all.map((img) => {
+      const aspect = img.width / img.height;
+      return (
+        <figure
+          class="drop-in"
+          style={`--aspect: ${aspect}; flex-grow: ${aspect}; flex-basis: calc(${aspect} * var(--row-h)); aspect-ratio: ${aspect};`}
+        >
+          <img
+            class="thumb img-fade"
+            src={cldUrl(img.public_id, { w: 1600 })}
+            data-full={cldUrl(img.public_id, { w: 3200, q: 'auto:best' })}
+            data-zoom={cldUrl(img.public_id, { q: 'auto:best' })}
+            data-album-href={img.albumHref}
+            data-album-label={img.albumLabel}
+            alt=""
+            loading="lazy"
+            width={img.width}
+            height={img.height}
+          />
+        </figure>
+      );
+    })}
+    <i class="filler"></i>
+    <i class="filler"></i>
+    <i class="filler"></i>
+    <i class="filler"></i>
+  </section>
+
+  <script is:inline>
+    // Randomize the home-grid order once per browser session. The seed
+    // sits in sessionStorage, so refreshes and back-navigation keep the
+    // same order; opening a new tab (or closing and reopening this one)
+    // ends the session and gives a fresh shuffle on the next visit.
+    (() => {
+      const SEED_KEY = 'imgswtf-home-seed';
+      let seed = sessionStorage.getItem(SEED_KEY);
+      if (!seed) {
+        seed = Math.random().toString(36).slice(2) + Date.now().toString(36);
+        sessionStorage.setItem(SEED_KEY, seed);
+      }
+
+      // Seed a deterministic RNG from the string so the same session
+      // always produces the same order (mulberry32 via FNV-1a hash).
+      let h = 2166136261 >>> 0;
+      for (let i = 0; i < seed.length; i++) {
+        h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
+      }
+      let state = h >>> 0;
+      const rng = () => {
+        state = (state + 0x6D2B79F5) >>> 0;
+        let t = state;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+
+      const container = document.querySelector('.justified');
+      if (!container) return;
+      const tiles = Array.from(container.querySelectorAll('.drop-in'));
+      // Fisher-Yates with the seeded RNG.
+      for (let i = tiles.length - 1; i > 0; i--) {
+        const j = Math.floor(rng() * (i + 1));
+        [tiles[i], tiles[j]] = [tiles[j], tiles[i]];
+      }
+      // appendChild on an existing child moves it — reinserting in the
+      // new order is cheaper than a rebuild.
+      tiles.forEach((tile) => container.appendChild(tile));
+      // Keep fillers at the end so the last row stays ragged.
+      container.querySelectorAll('.filler').forEach((f) => container.appendChild(f));
+    })();
+  </script>
+
+  <Lightbox />
+
+  {all.length === 0 && (
+    <p class="empty">No photos yet. Upload images to folders in Cloudinary.</p>
+  )}
+</Base>
+
+<style>
+  .justified {
+    padding-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    --row-h: 260px;
+  }
+  @media (max-width: 1100px) { .justified { --row-h: 220px; } }
+  @media (max-width: 900px) { .justified { --row-h: 190px; gap: 10px; } }
+  @media (max-width: 500px) { .justified { --row-h: 160px; gap: 6px; } }
+  .justified figure {
+    margin: 0;
+    overflow: hidden;
+    background: var(--card-bg);
+    min-width: 0;
+  }
+  .justified figure img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+    cursor: pointer;
+    transition: filter 380ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .justified figure img:hover {
+    filter: brightness(var(--img-hover));
+  }
+  .justified .filler {
+    flex-grow: 1000000000;
+    flex-basis: 0;
+    content: '';
+    height: 0;
+  }
+  .empty {
+    color: var(--muted);
+    padding: 80px 0;
+    text-align: center;
+  }
+</style>

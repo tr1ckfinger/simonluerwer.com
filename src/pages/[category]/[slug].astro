@@ -1,0 +1,156 @@
+---
+import Base from '../../layouts/Base.astro';
+import Lightbox from '../../components/Lightbox.astro';
+import {
+  getAlbums,
+  cldUrl,
+  categoryToPath,
+  categoryListingPath,
+} from '../../lib/cloudinary';
+
+export async function getStaticPaths() {
+  const albums = await getAlbums();
+  return albums.map((album) => ({
+    params: {
+      category: categoryToPath(album.category),
+      slug: album.slug,
+    },
+    props: { album },
+  }));
+}
+
+const { album } = Astro.props;
+
+// Default back destination is the category's listing page. The back-
+// arrow script in Base.astro overrides this client-side when the user
+// arrived from the flat home grid (/) instead — so this is just the
+// sensible fallback for direct loads / shared links.
+const backHref = categoryListingPath(album.category);
+
+// SEO: per-series description + the album's own cover as OG image so
+// link previews show the actual series, not a generic fallback.
+const seriesNoun = album.category === 'album' ? 'album' : 'project';
+const description = `${album.title} — a photo ${seriesNoun} by Simon Lürwer, photographer based in Hamburg, Germany. ${album.images.length} images.`;
+const ogImage = cldUrl(album.cover.public_id, {
+  w: 1200,
+  h: 630,
+  crop: 'fill',
+  q: 'auto:best',
+});
+---
+
+<Base
+  title={`${album.title} — Simon Lürwer Photography`}
+  description={description}
+  ogImage={ogImage}
+  albumHeader={{ title: album.title, backHref, count: album.images.length }}
+  noindex={album.hidden}
+>
+  <section class="justified">
+    {album.images.map((img) => {
+      const aspect = img.width / img.height;
+      return (
+        <figure
+          class:list={['drop-in', { landscape: aspect > 1 }]}
+          style={`--aspect: ${aspect}; flex-grow: ${aspect}; flex-basis: calc(${aspect} * var(--row-h)); aspect-ratio: ${aspect};`}
+        >
+          <img
+            class="thumb img-fade"
+            src={cldUrl(img.public_id, { w: 1600 })}
+            data-full={cldUrl(img.public_id, { w: 3200, q: 'auto:best' })}
+            data-zoom={cldUrl(img.public_id, { q: 'auto:best' })}
+            alt=""
+            loading="lazy"
+            width={img.width}
+            height={img.height}
+          />
+        </figure>
+      );
+    })}
+    <i class="filler"></i>
+    <i class="filler"></i>
+    <i class="filler"></i>
+    <i class="filler"></i>
+  </section>
+
+  <Lightbox />
+</Base>
+
+<style>
+  /* Justified flex layout, identical to the home grid (index.astro) so
+     the home feed and the inside-series pages share one rhythm —
+     switching from / into /<category>/<slug> doesn't read as
+     "different design". Each figure expands by its aspect ratio to
+     fill the row width; phantom .filler elements at the end keep the
+     last row from stretching when it has fewer items than a full row. */
+  /* Desktop --row-h is ~1.2× the home-grid values (260 → 312, 220 → 264)
+     so once a viewer commits to a single series the images get a touch
+     more room to breathe without dominating the layout. Gap is 3× the
+     home-grid gap (18 → 54, 10 → 30, 6 → 18) so the series view feels
+     deliberately spacious — more like an editorial spread than the
+     dense home-feed mosaic. Tablet and mobile keep the home-grid row
+     heights so small screens don't get unwieldy. */
+  .justified {
+    padding-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 54px;
+    --row-h: 312px;
+  }
+  @media (max-width: 1100px) { .justified { --row-h: 264px; } }
+  @media (max-width: 900px) { .justified { --row-h: 190px; gap: 30px; } }
+  @media (max-width: 500px) { .justified { --row-h: 160px; gap: 18px; } }
+  .justified figure {
+    margin: 0;
+    overflow: hidden;
+    background: var(--card-bg);
+    min-width: 0;
+  }
+  .justified figure img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+    cursor: pointer;
+    transition: filter 380ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .justified figure img:hover {
+    filter: brightness(var(--img-hover));
+  }
+  /* Phantom fillers absorb leftover slack on the last row so the row
+     keeps natural sizing instead of stretching its items to fill width. */
+  .justified .filler {
+    flex-grow: 1000000000;
+    flex-basis: 0;
+    content: '';
+    height: 0;
+  }
+  /* On mobile the flex justified layout's "last row stays at basis
+     while other rows stretch" trick makes orphan items visibly smaller
+     than the rows above. Swap in a 2-column CSS grid: every cell shares
+     one column width, so orphans on the last row match the cells above.
+     aspect-ratio: var(--aspect) keeps each image's true aspect, so
+     landscapes stay landscape instead of getting cover-cropped to 3:4
+     (the reason an earlier hardcoded `aspect-ratio: 3/4` grid was
+     replaced). Hide the phantom fillers — grid auto-places real items
+     into cells and the fillers would just take up dead cells.
+     Landscape items (aspect > 1) span both columns so they get the
+     full row width instead of sitting awkwardly in a half-column with
+     a tall empty gap beside them. */
+  @media (max-width: 500px) {
+    .justified {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 18px;
+    }
+    .justified .filler { display: none; }
+    .justified figure {
+      width: 100%;
+      height: auto;
+      aspect-ratio: var(--aspect);
+    }
+    .justified figure.landscape {
+      grid-column: span 2;
+    }
+  }
+</style>

@@ -1,0 +1,1510 @@
+---
+// Shared lightbox used by both the home grid and series (album /
+// project) pages. Opens whenever an img.thumb is clicked. If the
+// thumb carries data-album-href, a labelled pill ("Go to album" or
+// "Go to project") is shown alongside the close button.
+---
+
+<div id="lightbox" class="lightbox" aria-hidden="true">
+  <img id="lb-img" alt="" />
+</div>
+<button id="lb-prev" class="lb-nav lb-prev" aria-label="Previous image">
+  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+    <path
+      d="M15 5l-7 7 7 7"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </svg>
+</button>
+<button id="lb-next" class="lb-nav lb-next" aria-label="Next image">
+  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+    <path
+      d="M9 5l7 7-7 7"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </svg>
+</button>
+<div id="lb-dots" class="lb-dots" aria-hidden="true"></div>
+<button id="lb-close" class="lb-close" aria-label="Close">
+  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+    <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+  </svg>
+</button>
+<a id="lb-album" class="lb-album" href="#">Go to album</a>
+
+<style>
+  .lightbox {
+    position: fixed;
+    top: 0;
+    left: 0;
+    /* iOS Safari with viewport-fit=cover clips position:fixed elements
+       to the visual viewport (above the floating bottom URL bar) — no
+       CSS unit (100vh, 100lvh, 100dvh) reliably extends the element
+       behind the URL bar / home-indicator safe area. We size the
+       lightbox via JS using documentElement.clientHeight, which IS
+       the full layout viewport including under chrome. Fallback to
+       100vh below for the brief moment before JS runs. */
+    width: 100vw;
+    height: 100vh;
+    background: transparent;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    z-index: 100;
+    padding: 40px;
+    /* GPU-promote the lightbox so its content sits on its own
+       compositor layer from the start — no first-open layer
+       creation jank, and the layer is consistently sampled by
+       iOS Safari's URL-bar blur. */
+    transform: translateZ(0);
+    will-change: opacity;
+    /* The lightbox itself is intentionally transparent. Body's --bg
+       equals --lightbox-bg, so when the page chrome (main + header)
+       fades out on open, the user sees the same colour through the
+       transparent lightbox as a solid lightbox bg would have shown.
+       Why not just fade an opaque lightbox bg in over the grid?
+       iOS Safari's URL-bar backdrop blur lazily samples the
+       compositor, with a frame or two of latency per layer. A
+       fade on a position:fixed element shows up under the URL bar
+       a perceptible beat after it shows up elsewhere. Fading the
+       static-position page chrome instead means the chrome's blur
+       sample tracks the page itself — same layer, same timing,
+       no visible lag. */
+  }
+  .lightbox.open,
+  .lightbox.closing {
+    display: flex;
+  }
+  .lightbox.open.zoomed {
+    display: block;
+    overflow: auto;
+    padding: 0;
+    cursor: zoom-out;
+  }
+  .lightbox img {
+    max-width: 100%;
+    max-height: 100%;
+    user-select: none;
+    -webkit-user-drag: none;
+    cursor: zoom-in;
+    display: block;
+  }
+  .lightbox.zoomed img {
+    max-width: none;
+    max-height: none;
+    cursor: zoom-out;
+  }
+
+  .lb-close {
+    position: fixed;
+    top: 20px;
+    right: 24px;
+    width: 40px;
+    height: 40px;
+    border-radius: 999px;
+    border: none;
+    background: var(--btn-bg);
+    color: var(--fg);
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 200;
+    transition: background 150ms ease, opacity 200ms ease;
+    display: none;
+    opacity: 0;
+  }
+  .lb-close.visible {
+    display: flex;
+    opacity: 1;
+  }
+  .lb-close:hover { background: var(--btn-bg-hover); }
+
+  .lb-album {
+    position: fixed;
+    top: 20px;
+    right: 76px;
+    height: 40px;
+    padding: 0 16px;
+    border-radius: 999px;
+    background: var(--btn-bg);
+    color: var(--fg);
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    z-index: 200;
+    transition: background 150ms ease, opacity 200ms ease;
+    display: none;
+    opacity: 0;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .lb-album.visible {
+    display: inline-flex;
+    opacity: 1;
+  }
+  .lb-album:hover { background: var(--btn-bg-hover); }
+
+  /* Prev / next arrows. Desktop: pill with a background, matching the
+     existing Close / Go to album controls. On mobile this is
+     overridden to a bare SVG (no background) below. */
+  .lb-nav {
+    position: fixed;
+    top: 50%;
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    border: none;
+    border-radius: 999px;
+    background: var(--btn-bg);
+    color: var(--fg);
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 200;
+    transform: translateY(-50%);
+    transition: background 150ms ease, opacity 200ms ease;
+    display: none;
+    opacity: 0;
+  }
+  .lb-nav.visible {
+    display: flex;
+    opacity: 1;
+  }
+  .lb-nav:hover { background: var(--btn-bg-hover); }
+  .lb-nav[disabled] {
+    opacity: 0.25;
+    cursor: default;
+    pointer-events: none;
+  }
+  .lb-nav.visible[disabled] {
+    opacity: 0.25;
+  }
+  .lb-prev { left: 24px; }
+  .lb-next { right: 24px; }
+
+  /* Album-view pagination dots, Instagram-style. Non-interactive
+     indicator only; pointer-events are off so they never swallow a
+     backdrop click. Small + fixed centre + subtle so they don't
+     compete with the image. */
+  .lb-dots {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 24px;
+    display: none;
+    justify-content: center;
+    /* Centre dots vertically so 4/5/6px sizes share a midline
+       instead of sitting on a shared bottom edge. */
+    align-items: center;
+    /* No `gap`: we use per-dot margin instead so hidden (0-width)
+       dots don't leave gap-space behind during transitions. */
+    z-index: 200;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 200ms ease;
+  }
+  .lb-dots.visible {
+    display: flex;
+    opacity: 1;
+  }
+  /* Dots are created by JS (document.createElement('span')), so they
+     don't carry Astro's scope attribute. Without :global() the
+     scoped selectors don't match and the spans render at 0×0 with
+     no background — i.e. invisible. */
+  .lb-dots :global(.dot) {
+    display: block;
+    flex: 0 0 auto;
+    margin: 0 2.5px;
+    width: 6px;
+    height: 6px;
+    min-width: 6px;
+    min-height: 6px;
+    border-radius: 999px;
+    background: var(--fg);
+    opacity: 0.35;
+    /* Size/margin animate slow + smooth (window shift motion).
+       Opacity animates fast + ease-out so the active/inactive swap
+       reads as an instant hand-off — the new dot lights up exactly
+       as the old one dims, instead of both hanging in an ambiguous
+       mid-state during the slower crossfade. */
+    transition: width 220ms ease, height 220ms ease, min-width 220ms ease,
+      min-height 220ms ease, margin 220ms ease, opacity 140ms ease-out,
+      background-color 140ms ease-out;
+  }
+  /* Graduated shrink toward the truncated edge, Instagram-style. */
+  .lb-dots :global(.dot.small) {
+    width: 5px;
+    height: 5px;
+    min-width: 5px;
+    min-height: 5px;
+  }
+  .lb-dots :global(.dot.tiny) {
+    width: 4px;
+    height: 4px;
+    min-width: 4px;
+    min-height: 4px;
+    opacity: 0.2;
+  }
+  /* Dots outside the 5-dot visible window collapse to zero size so
+     they don't take up strip width, but stay in the DOM so the
+     transitions fire when the active index moves and they slide in
+     or out of the window. */
+  .lb-dots :global(.dot.hidden) {
+    width: 0;
+    height: 0;
+    min-width: 0;
+    min-height: 0;
+    margin: 0;
+    opacity: 0;
+  }
+  /* Active uses the same foreground colour as the inactive dots but
+     at full opacity — white-ish in dark mode, near-black in light
+     mode. Keeps the indicator neutral instead of a branded blue. */
+  .lb-dots :global(.dot.active) {
+    opacity: 1;
+  }
+
+  @media (max-width: 700px) {
+    /* Extra bottom padding reserves room for the fixed controls so a
+       tall portrait image never extends into the button zone. 96px =
+       52 (button height) + 24 (baseline offset) + 20 (visual gap). */
+    .lightbox { padding: 16px 16px 96px; }
+    .lb-close {
+      top: auto;
+      bottom: max(24px, env(safe-area-inset-bottom, 0));
+      right: 20px;
+      width: 52px;
+      height: 52px;
+    }
+    .lb-album {
+      top: auto;
+      bottom: max(24px, env(safe-area-inset-bottom, 0));
+      right: 84px;
+      height: 52px;
+      padding: 0 18px;
+      font-size: 14px;
+    }
+    /* On mobile the arrows overlay the image with no pill — just a
+       white chevron with a soft drop shadow so it reads against both
+       light and dark photos. */
+    .lb-nav {
+      width: 44px;
+      height: 44px;
+      background: transparent;
+      color: #ffffff;
+      filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.55));
+    }
+    .lb-nav:hover { background: transparent; }
+    .lb-prev { left: 4px; }
+    .lb-next { right: 4px; }
+    /* Dots sit on the same baseline as the close button — horizontally
+       centred, vertically aligned to the X's mid-line. Close button:
+       bottom = max(24, env), height 52, so vertical centre is
+       (bottom + 26) from the viewport bottom. For a 6px dot to share
+       that centre, dot bottom = close-bottom + 23. */
+    .lb-dots {
+      bottom: calc(max(24px, env(safe-area-inset-bottom, 0px)) + 23px);
+    }
+  }
+</style>
+
+<script>
+  const lightbox = document.getElementById('lightbox') as HTMLDivElement;
+  const lbImg = document.getElementById('lb-img') as HTMLImageElement;
+  const lbClose = document.getElementById('lb-close') as HTMLButtonElement;
+  const lbAlbum = document.getElementById('lb-album') as HTMLAnchorElement;
+  const lbPrev = document.getElementById('lb-prev') as HTMLButtonElement;
+  const lbNext = document.getElementById('lb-next') as HTMLButtonElement;
+  const lbDots = document.getElementById('lb-dots') as HTMLDivElement;
+  const thumbs = Array.from(
+    document.querySelectorAll<HTMLImageElement>('img.thumb')
+  );
+
+  // Move the lightbox tree out of the page layout and onto <body>.
+  // No ancestor's containing block (transform / filter / contain on a
+  // wrapper somewhere) can then affect these position:fixed elements,
+  // which is what we want for a true full-screen overlay.
+  [lightbox, lbClose, lbAlbum, lbPrev, lbNext, lbDots].forEach((el) => {
+    document.body.appendChild(el);
+  });
+
+  // The page chrome we fade in / out alongside the lightbox open
+  // and close animations. The lightbox itself stays transparent —
+  // see the .lightbox CSS comment for the full rationale. Short
+  // version: iOS Safari's URL-bar blur samples each compositor
+  // layer with a frame or two of latency, so a fade on the
+  // position:fixed lightbox lags visibly under the chrome. Fading
+  // the position-static <main> + sticky <header> instead keeps the
+  // sample timing in step. The nav fades too (not just main) so
+  // the now-transparent lightbox doesn't reveal the header text
+  // bleeding through during the open transition.
+  const mainEl = document.querySelector('main') as HTMLElement | null;
+  const navEl = document.querySelector('header.nav') as HTMLElement | null;
+  const fadeTargets = [mainEl, navEl].filter(
+    (el): el is HTMLElement => !!el
+  );
+
+  // iOS Safari with viewport-fit=cover constrains position:fixed
+  // elements to the visual viewport (above the floating bottom URL
+  // bar) when their height is expressed in viewport units — 100vh,
+  // 100lvh, and 100dvh all leave a strip of grid showing through the
+  // translucent URL bar / home-indicator zone. Sizing the lightbox in
+  // explicit pixels from documentElement.clientHeight (the full layout
+  // viewport, including under chrome) covers that area reliably.
+  // window.innerHeight is used as the floor in case clientHeight
+  // collapses on some embedded browsers.
+  function syncLightboxSize() {
+    const h = Math.max(
+      document.documentElement.clientHeight,
+      window.innerHeight
+    );
+    lightbox.style.height = h + 'px';
+  }
+  // Pin lbImg to its final on-screen dimensions, computed from the
+  // source thumb's aspect ratio fitted into the padded lightbox area.
+  // Without this, the <img> renders at the loaded resource's natural
+  // pixel size — and our thumb URLs are 1200/1400px wide, smaller
+  // than a typical desktop lightbox area. The image would then "grow"
+  // from natural-size to fit-size only after the higher-res preload
+  // (?w=3200) finishes loading and src swaps, which can take seconds.
+  // With explicit dimensions matching the source aspect, the image
+  // fills its final box from the first paint regardless of which
+  // resolution is currently loaded.
+  function applyFitSize(thumb: HTMLImageElement) {
+    const aw =
+      parseFloat(thumb.getAttribute('width') || '') ||
+      thumb.naturalWidth ||
+      1;
+    const ah =
+      parseFloat(thumb.getAttribute('height') || '') ||
+      thumb.naturalHeight ||
+      1;
+    const cs = getComputedStyle(lightbox);
+    const padL = parseFloat(cs.paddingLeft) || 0;
+    const padR = parseFloat(cs.paddingRight) || 0;
+    const padT = parseFloat(cs.paddingTop) || 0;
+    const padB = parseFloat(cs.paddingBottom) || 0;
+    const lbH =
+      parseFloat(lightbox.style.height) || window.innerHeight;
+    const availW = window.innerWidth - padL - padR;
+    const availH = lbH - padT - padB;
+    if (availW <= 0 || availH <= 0) return;
+    const aspect = aw / ah;
+    const availAspect = availW / availH;
+    let w: number, h: number;
+    if (aspect > availAspect) {
+      // Constrained by width — letterbox top/bottom.
+      w = availW;
+      h = availW / aspect;
+    } else {
+      // Constrained by height — letterbox sides.
+      h = availH;
+      w = availH * aspect;
+    }
+    lbImg.style.width = w + 'px';
+    lbImg.style.height = h + 'px';
+  }
+  syncLightboxSize();
+  window.addEventListener('resize', syncLightboxSize);
+  window.addEventListener('orientationchange', syncLightboxSize);
+  // visualViewport.resize fires when iOS shows / hides chrome without
+  // a layout viewport change — keep size in sync there too so a chrome
+  // collapse mid-lightbox doesn't briefly leave a gap at the bottom.
+  window.visualViewport?.addEventListener('resize', syncLightboxSize);
+
+  let sourceEl: HTMLImageElement | null = null;
+  let currentIndex = -1;
+  // Dots only show on series (album / project) pages. We distinguish
+  // them by checking whether the clicked thumb carries data-album-href:
+  // home-grid thumbs do (each represents a series), series-page thumbs
+  // don't.
+  let isAlbumPage = false;
+  let isOpen = false;
+  let zoomed = false;
+  // Multiplicative zoom factor applied to the baseline rendered size.
+  // Driven by zoomIn / resetZoom; lets a follow-up pinch layer on top
+  // of an already-zoomed image (new factor = old × pinch ratio).
+  let currentZoomFactor = 1;
+  // Guards a slide from being interrupted mid-way; taps / keys /
+  // swipes during a slide are dropped rather than queued.
+  let animating = false;
+
+  const ZOOM_FACTOR = 3.5;
+  const isTouchDevice = matchMedia('(hover: none) and (pointer: coarse)').matches;
+
+  // Re-fit the lightbox image whenever the viewport changes size, so
+  // landscape vs portrait constraints stay correct as you rotate or
+  // resize. Registered down here (rather than inside syncLightboxSize)
+  // so it doesn't run during the initial syncLightboxSize() call above
+  // — at that point the state lets (isOpen, zoomed, sourceEl) are still
+  // in their TDZ and would throw on access.
+  const refitOnResize = () => {
+    if (isOpen && !zoomed && sourceEl) applyFitSize(sourceEl);
+  };
+  window.addEventListener('resize', refitOnResize);
+  window.addEventListener('orientationchange', refitOnResize);
+  window.visualViewport?.addEventListener('resize', refitOnResize);
+
+  function preloadFullFor(thumb: HTMLImageElement) {
+    const full = thumb.dataset.full;
+    if (full && full !== lbImg.src) {
+      const pre = new Image();
+      pre.onload = () => {
+        if (isOpen && sourceEl === thumb && !zoomed) lbImg.src = full;
+      };
+      pre.src = full;
+    }
+  }
+
+  // Fire-and-forget pre-decode of a thumb's display source. Keeping
+  // the neighbours warm means the next swipe's slide animation has
+  // a fully decoded <img> to swap in — no black flash mid-slide.
+  function warmThumb(thumb: HTMLImageElement | undefined) {
+    if (!thumb) return;
+    const src = thumb.currentSrc || thumb.src;
+    if (!src) return;
+    const pre = new Image();
+    pre.src = src;
+    if (typeof pre.decode === 'function') pre.decode().catch(() => {});
+  }
+
+  function warmAdjacent() {
+    warmThumb(thumbs[currentIndex - 1]);
+    warmThumb(thumbs[currentIndex + 1]);
+  }
+
+  function updateNavState() {
+    // Arrows stay visible but are disabled at the ends (no wrap).
+    const hasMultiple = thumbs.length > 1;
+    lbPrev.classList.toggle('visible', hasMultiple);
+    lbNext.classList.toggle('visible', hasMultiple);
+    lbPrev.disabled = currentIndex <= 0;
+    lbNext.disabled = currentIndex >= thumbs.length - 1;
+  }
+
+  // Instagram-style windowed pagination: show up to MAX_VISIBLE dots at
+  // a time, centre the active dot when possible, and shrink the two
+  // dots closest to whichever edge still has hidden items beyond it.
+  const MAX_VISIBLE_DOTS = 5;
+
+  // Build one span per image up front. Keeping the DOM stable lets CSS
+  // transitions fire on navigation (size + opacity animate as the
+  // active dot moves and the window scrolls). Out-of-window dots
+  // collapse to zero size via the `.hidden` class.
+  function renderDots() {
+    lbDots.innerHTML = '';
+    if (!isAlbumPage || thumbs.length <= 1) {
+      lbDots.classList.remove('visible');
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    for (let j = 0; j < thumbs.length; j++) {
+      const dot = document.createElement('span');
+      dot.className = 'dot';
+      frag.appendChild(dot);
+    }
+    lbDots.appendChild(frag);
+    lbDots.classList.add('visible');
+    updateDotStates();
+  }
+
+  function updateDotStates() {
+    if (!isAlbumPage || thumbs.length <= 1) return;
+    const N = thumbs.length;
+    const visibleCount = Math.min(MAX_VISIBLE_DOTS, N);
+    // Centre active when possible; clamp so the window never falls off
+    // either end of the list.
+    const windowStart =
+      N <= MAX_VISIBLE_DOTS
+        ? 0
+        : Math.max(0, Math.min(currentIndex - 2, N - MAX_VISIBLE_DOTS));
+    const windowEnd = windowStart + visibleCount - 1;
+    const truncLeft = windowStart > 0;
+    const truncRight = windowEnd < N - 1;
+
+    const dots = lbDots.children;
+    for (let j = 0; j < dots.length; j++) {
+      const dot = dots[j] as HTMLElement;
+      let cls = 'dot';
+      const inWindow = j >= windowStart && j <= windowEnd;
+      if (!inWindow) {
+        cls += ' hidden';
+      } else if (j === currentIndex) {
+        cls += ' active';
+      } else {
+        // Outermost dot on a truncated side → tiny; the next one → small.
+        if (truncLeft && j === windowStart) cls += ' tiny';
+        else if (truncLeft && j === windowStart + 1) cls += ' small';
+        else if (truncRight && j === windowEnd) cls += ' tiny';
+        else if (truncRight && j === windowEnd - 1) cls += ' small';
+      }
+      dot.className = cls;
+    }
+  }
+
+  function openLightbox(thumb: HTMLImageElement) {
+    if (isOpen) return;
+    sourceEl = thumb;
+    currentIndex = thumbs.indexOf(thumb);
+    isAlbumPage = !thumb.dataset.albumHref;
+
+    // Clear any lingering transform / transition state from a
+    // previous slide or pinch so the FLIP open animation starts from
+    // a known baseline.
+    lbImg.style.transform = '';
+    lbImg.style.transition = '';
+    lbImg.style.transformOrigin = '';
+    lbImg.style.opacity = '';
+
+    // Use the already-loaded thumbnail src for instant display.
+    lbImg.src = thumb.currentSrc || thumb.src;
+
+    // Pin lbImg to its final fit dimensions in pixels BEFORE we measure
+    // the FLIP "to" rect. Without this the <img> sizes itself to its
+    // currently-loaded resource (the 1200/1400-px thumb), which is
+    // smaller than the lightbox area on most desktops — so the image
+    // would render small and only "grow" later, when the higher-res
+    // preload finishes. Applying fit dimensions up front guarantees the
+    // image fills its final box from the very first paint.
+    applyFitSize(thumb);
+
+    const from = thumb.getBoundingClientRect();
+    // The lightbox is transparent — no pre-set opacity needed. The
+    // page chrome (main + header) is what fades; the lightbox just
+    // toggles display via the .open class so it can host the FLIP'd
+    // image and capture clicks for backdrop-close.
+    lightbox.classList.add('open');
+    lbClose.classList.add('visible');
+    updateNavState();
+
+    const href = thumb.dataset.albumHref;
+    const label = thumb.dataset.albumLabel;
+    if (href) {
+      lbAlbum.href = href;
+      // Label is "Go to album" or "Go to project" depending on which
+      // parent folder the image lives under — set server-side in
+      // index.astro so the pill matches the destination type.
+      if (label) lbAlbum.textContent = label;
+      lbAlbum.classList.add('visible');
+    } else {
+      lbAlbum.classList.remove('visible');
+    }
+
+    renderDots();
+
+    lightbox.setAttribute('aria-hidden', 'false');
+    // Lock body scroll. Modern browsers (Chromium 94+, Firefox 97+,
+    // Safari 18.2+) honour `scrollbar-gutter: stable` on <html>, which
+    // already reserves the gutter permanently — overflow:hidden then
+    // doesn't shift the layout. For older browsers without that
+    // support, fall back to padding the body by the measured
+    // scrollbar width before the overflow flip.
+    //
+    // Crucially, the JS path must NOT run when scrollbar-gutter is
+    // supported: the gutter is already in place, so adding paddingRight
+    // on top of it double-compensates and shifts the layout the other
+    // way (15px to the left in our case).
+    const scrollbarGutterSupported =
+      typeof CSS !== 'undefined' &&
+      typeof CSS.supports === 'function' &&
+      CSS.supports('scrollbar-gutter', 'stable');
+    if (!scrollbarGutterSupported) {
+      const scrollbarWidth =
+        window.innerWidth - document.documentElement.clientWidth;
+      if (scrollbarWidth > 0) {
+        document.body.style.paddingRight = scrollbarWidth + 'px';
+      }
+    }
+    document.body.style.overflow = 'hidden';
+
+    // Synchronously measure the final lightbox rect and pre-apply the
+    // FLIP "from" transform as an inline style. Without this, the
+    // first painted frame after classList.add('open') shows lbImg at
+    // its full final size — then the WAAPI animation kicks in on the
+    // next rAF and snaps it back to the thumb position. That single
+    // mis-framed paint is what makes the open feel abrupt.
+    // getBoundingClientRect forces layout, so lbImg already has real
+    // dimensions by the time we read it.
+    const toRect = lbImg.getBoundingClientRect();
+    let flipArgs: { dx: number; dy: number; s: number } | null = null;
+    if (toRect.width > 0 && toRect.height > 0) {
+      const dx = from.left + from.width / 2 - (toRect.left + toRect.width / 2);
+      const dy = from.top + from.height / 2 - (toRect.top + toRect.height / 2);
+      const s = from.width / toRect.width;
+      lbImg.style.transformOrigin = '50% 50%';
+      lbImg.style.transform = `translate(${dx}px, ${dy}px) scale(${s})`;
+      flipArgs = { dx, dy, s };
+    }
+
+    requestAnimationFrame(() => {
+      // Fade the page chrome (main + header) out in lockstep with
+      // the FLIP. As they fade, body's --bg (which equals
+      // --lightbox-bg) shows through. After finish, leave inline
+      // opacity:0 in place so they stay hidden until close re-fades
+      // them back in — otherwise they'd pop back visible the instant
+      // fill:'forwards' is released.
+      fadePage(fadeTargets, 'out', OPEN_DURATION, OPEN_EASING);
+
+      if (flipArgs) runOpenFlip(flipArgs.dx, flipArgs.dy, flipArgs.s);
+      else runFlip(from, 'open');
+    });
+
+    preloadFullFor(thumb);
+    warmAdjacent();
+
+    isOpen = true;
+  }
+
+  // Open/close timing constants. ease-in-out with a slow start —
+  // a pure ease-out covers ~40% of the scale-up in the first ~30ms,
+  // which reads as an abrupt pop from the thumb position. The S-curve
+  // 0.45, 0, 0.15, 1 starts slow and decelerates into the resting
+  // state, which feels like a settle.
+  const OPEN_DURATION = 320;
+  const OPEN_EASING = 'cubic-bezier(0.45, 0, 0.15, 1)';
+  const CLOSE_DURATION = 220;
+  const CLOSE_EASING = 'cubic-bezier(0.45, 0, 0.15, 1)';
+
+  // Dedicated open FLIP. fill:'forwards' holds identity after finish
+  // so the inline "from" transform (still on the element) doesn't
+  // snap the image back to the thumb position when the animation's
+  // effect drops. Cleanup clears inline + cancels.
+  function runOpenFlip(dx: number, dy: number, s: number) {
+    const fromKF = { transform: `translate(${dx}px, ${dy}px) scale(${s})` };
+    const toKF = { transform: 'translate(0, 0) scale(1)' };
+    const anim = lbImg.animate([fromKF, toKF], {
+      duration: OPEN_DURATION,
+      easing: OPEN_EASING,
+      fill: 'forwards',
+    });
+    const cleanup = () => {
+      lbImg.style.transform = '';
+      lbImg.style.transformOrigin = '';
+      anim.cancel();
+    };
+    anim.finished.then(cleanup, cleanup);
+  }
+
+  async function goTo(
+    newIndex: number,
+    direction: 'next' | 'prev',
+    currentDx: number = 0
+  ) {
+    if (!isOpen || animating) return;
+    if (newIndex < 0 || newIndex >= thumbs.length) return;
+    if (newIndex === currentIndex) return;
+    if (zoomed) resetZoom();
+
+    // Claim the animating flag up front so repeated taps / key
+    // presses during decode are dropped rather than racing.
+    animating = true;
+
+    const newThumb = thumbs[newIndex];
+    const newSrc = newThumb.currentSrc || newThumb.src;
+
+    // Pre-decode the incoming image before doing anything visible.
+    // Without this step, swapping lbImg.src and animating straight
+    // away shows an empty <img> element that sliiides in — then
+    // pops once the browser finishes decoding the pixels. If the
+    // image is already warmed by warmAdjacent() this resolves
+    // effectively instantly.
+    try {
+      const pre = new Image();
+      pre.src = newSrc;
+      if (typeof pre.decode === 'function') await pre.decode();
+    } catch {}
+
+    // Bail if the lightbox was closed while we were decoding.
+    if (!isOpen) {
+      animating = false;
+      return;
+    }
+
+    // Clone the current image and pin it absolutely at its on-screen
+    // rect. We'll animate the clone OUT to one side while the live
+    // <img> (with its src swapped to the now-decoded new image)
+    // animates IN from the opposite side.
+    // Note: getBoundingClientRect() reflects the applied transform, so
+    // if currentDx != 0 the clone is pinned at the already-dragged
+    // visual position — exactly where the user's finger released it.
+    const rect = lbImg.getBoundingClientRect();
+    const outgoing = document.createElement('img');
+    outgoing.src = lbImg.currentSrc || lbImg.src;
+    outgoing.alt = '';
+    outgoing.setAttribute('aria-hidden', 'true');
+    outgoing.style.position = 'fixed';
+    outgoing.style.top = rect.top + 'px';
+    outgoing.style.left = rect.left + 'px';
+    outgoing.style.width = rect.width + 'px';
+    outgoing.style.height = rect.height + 'px';
+    outgoing.style.pointerEvents = 'none';
+    outgoing.style.zIndex = '150';
+    outgoing.style.userSelect = 'none';
+    document.body.appendChild(outgoing);
+
+    // Resize lbImg to the new thumb's fit dimensions BEFORE swapping
+    // src. The clone is already absolutely positioned at the old rect
+    // via inline pixel styles, so it's unaffected. Doing this in the
+    // same frame as the src swap means the new image paints at the
+    // correct final size from frame one — no visible "grow" while a
+    // higher-res preload finishes.
+    applyFitSize(newThumb);
+
+    // Swap in the newly-decoded image — paints on the very next
+    // frame because the decode is already done.
+    lbImg.src = newSrc;
+
+    const vw = window.innerWidth;
+    const outDx = direction === 'next' ? -vw : vw;
+    const inStartDx = direction === 'next' ? vw : -vw;
+
+    // Scale the animation shorter when a drag already carried the
+    // image most of the way across — but never faster than 160ms, so
+    // even fast flicks still feel like a transition rather than a pop.
+    const progress = Math.min(1, Math.abs(currentDx) / vw);
+    const duration = Math.max(160, Math.round(320 - progress * 180));
+    const easing = 'cubic-bezier(0.4, 0, 0.2, 1)';
+
+    // The clone sits at rect (= natural + currentDx). For it to end up
+    // fully off-screen (at natural + outDx) its transform needs to
+    // travel (outDx - currentDx) more — less distance when the drag
+    // already did the work, which is what makes a near-committed drag
+    // commit almost instantly.
+    const cloneEndDx = outDx - currentDx;
+
+    const outAnim = outgoing.animate(
+      [{ transform: 'translateX(0)' }, { transform: `translateX(${cloneEndDx}px)` }],
+      { duration, easing, fill: 'forwards' }
+    );
+    // fill:'forwards' holds lbImg at translateX(0) after the animation
+    // finishes; without it the effect value would drop and lbImg would
+    // snap back to its (stale) inline transform from the drag. Cleanup
+    // clears inline styles before cancelling the fill.
+    const inAnim = lbImg.animate(
+      [{ transform: `translateX(${inStartDx}px)` }, { transform: 'translateX(0)' }],
+      { duration, easing, fill: 'forwards' }
+    );
+
+    const cleanup = () => {
+      outgoing.remove();
+      lbImg.style.transform = '';
+      lbImg.style.transition = '';
+      inAnim.cancel();
+      animating = false;
+    };
+    Promise.all([outAnim.finished, inAnim.finished]).then(cleanup, cleanup);
+
+    // Commit state
+    sourceEl = newThumb;
+    currentIndex = newIndex;
+
+    // Home-grid thumbs carry data-album-href; update the pill's href
+    // and label so the button always links to the currently-shown
+    // image's parent series.
+    if (!isAlbumPage) {
+      const href = newThumb.dataset.albumHref;
+      const label = newThumb.dataset.albumLabel;
+      if (href) lbAlbum.href = href;
+      if (label) lbAlbum.textContent = label;
+    } else {
+      // Update dot state — classes only, no DOM churn. CSS transitions
+      // animate sizes and opacity as the window and active shift.
+      updateDotStates();
+    }
+
+    updateNavState();
+    preloadFullFor(newThumb);
+    warmAdjacent();
+  }
+
+  function next() {
+    if (currentIndex < thumbs.length - 1) goTo(currentIndex + 1, 'next');
+  }
+  function prev() {
+    if (currentIndex > 0) goTo(currentIndex - 1, 'prev');
+  }
+
+  function runFlip(from: DOMRect, direction: 'open' | 'close') {
+    const to = lbImg.getBoundingClientRect();
+    if (to.width === 0 || to.height === 0) return;
+
+    const dx = from.left + from.width / 2 - (to.left + to.width / 2);
+    const dy = from.top + from.height / 2 - (to.top + to.height / 2);
+    const s = from.width / to.width;
+
+    const fromKF = { transform: `translate(${dx}px, ${dy}px) scale(${s})` };
+    const toKF = { transform: 'translate(0, 0) scale(1)' };
+
+    const opening = direction === 'open';
+    return lbImg.animate(
+      opening ? [fromKF, toKF] : [toKF, fromKF],
+      {
+        duration: opening ? OPEN_DURATION : CLOSE_DURATION,
+        easing: opening ? OPEN_EASING : CLOSE_EASING,
+      }
+    );
+  }
+
+  // Helper: animate the listed elements' opacity in or out together.
+  // Direction 'out' = 1 → 0 and pins inline opacity:0 after finish
+  // (so the elements stay hidden while the lightbox is open, after
+  // fill:'forwards' is released). Direction 'in' = 0 → 1 and clears
+  // inline opacity after finish, returning to the stylesheet default.
+  function fadePage(
+    els: HTMLElement[],
+    direction: 'in' | 'out',
+    duration: number,
+    easing: string
+  ) {
+    const out = direction === 'out';
+    const keyframes = out
+      ? [{ opacity: 1 }, { opacity: 0 }]
+      : [{ opacity: 0 }, { opacity: 1 }];
+    els.forEach((el) => {
+      const a = el.animate(keyframes, {
+        duration,
+        easing,
+        fill: 'forwards',
+      });
+      const finalize = () => {
+        el.style.opacity = out ? '0' : '';
+        a.cancel();
+      };
+      a.finished.then(finalize, finalize);
+    });
+  }
+
+  function closeLightbox(opts?: { dragDy?: number }) {
+    if (!isOpen) return;
+    resetZoom();
+
+    lightbox.classList.remove('open');
+    lightbox.classList.add('closing');
+    lbClose.classList.remove('visible');
+    lbAlbum.classList.remove('visible');
+    lbPrev.classList.remove('visible');
+    lbNext.classList.remove('visible');
+    lbDots.classList.remove('visible');
+    lightbox.setAttribute('aria-hidden', 'true');
+
+    const doClose = () => {
+      lightbox.classList.remove('closing');
+      document.body.style.overflow = '';
+      // Clear the scrollbar-compensation pad applied on open.
+      document.body.style.paddingRight = '';
+      lbImg.src = '';
+      lbImg.style.width = '';
+      lbImg.style.height = '';
+      lbImg.style.transform = '';
+      lbImg.style.transition = '';
+      lbImg.style.transformOrigin = '';
+      lbImg.style.opacity = '';
+      lightbox.style.opacity = '';
+      sourceEl = null;
+      isOpen = false;
+      touchMode = 'none';
+      touchDx = 0;
+      touchDy = 0;
+      touchMoved = false;
+      dragAxis = null;
+    };
+
+    // Drag-down dismiss: continue the vertical motion off-screen
+    // instead of FLIPping back to the source thumbnail. The image
+    // slides + scales + fades on its own, and the page chrome fades
+    // back in over the same window.
+    if (opts?.dragDy !== undefined) {
+      const vh = window.innerHeight;
+      const startTransform =
+        lbImg.style.transform || `translateY(${opts.dragDy}px)`;
+      lbImg.style.transition = 'none';
+      const imgAnim = lbImg.animate(
+        [
+          { transform: startTransform, opacity: 1 },
+          { transform: `translateY(${vh}px) scale(0.6)`, opacity: 0 },
+        ],
+        {
+          duration: 260,
+          easing: 'cubic-bezier(0.4, 0, 1, 1)',
+          fill: 'forwards',
+        }
+      );
+      // Match the page-chrome fade-in to the dismiss timing so the
+      // grid + nav crossfade back as the image slides off-screen.
+      fadePage(fadeTargets, 'in', 260, 'cubic-bezier(0.4, 0, 1, 1)');
+      const finish = () => {
+        imgAnim.cancel();
+        doClose();
+      };
+      imgAnim.finished.then(finish, finish);
+      return;
+    }
+
+    if (!sourceEl) {
+      // No thumb to FLIP back to — just fade the page chrome back in
+      // and the image out together. doClose runs once both finish.
+      const imgAnim = lbImg.animate(
+        [{ opacity: 1 }, { opacity: 0 }],
+        { duration: CLOSE_DURATION, easing: CLOSE_EASING, fill: 'forwards' }
+      );
+      fadePage(fadeTargets, 'in', CLOSE_DURATION, CLOSE_EASING);
+      const finish = () => {
+        imgAnim.cancel();
+        doClose();
+      };
+      imgAnim.finished.then(finish, finish);
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      const thumbRect = sourceEl!.getBoundingClientRect();
+      const imgAnim = runFlip(thumbRect, 'close');
+      // Crossfade the page chrome back in as the FLIP returns the
+      // image to its thumb position. The thumb itself is in <main>,
+      // so by the time the FLIP lands, the thumb is fully opaque
+      // again underneath.
+      fadePage(fadeTargets, 'in', CLOSE_DURATION, CLOSE_EASING);
+      if (imgAnim) {
+        const finish = () => doClose();
+        imgAnim.finished.then(finish, finish);
+      } else {
+        // No FLIP fired (lbImg had zero size). Defer doClose by the
+        // close duration so the page-chrome fade still has time to
+        // play out before we tear down.
+        setTimeout(doClose, CLOSE_DURATION);
+      }
+    });
+  }
+
+  function resetZoom() {
+    if (!zoomed) return;
+    zoomed = false;
+    currentZoomFactor = 1;
+    lightbox.classList.remove('zoomed');
+    lbImg.style.width = '';
+    lbImg.style.height = '';
+    lightbox.scrollTop = 0;
+    lightbox.scrollLeft = 0;
+    // Restore the fit dimensions for the source thumb so the image
+    // returns to its baseline size. Without this, clearing width/height
+    // above falls back to the natural pixel size of the currently-loaded
+    // resource — which would make the image appear undersized again
+    // until a higher-res preload swaps in.
+    if (isOpen && sourceEl) applyFitSize(sourceEl);
+  }
+
+  function zoomIn(x: number, y: number, factor: number = ZOOM_FACTOR) {
+    const rect = lbImg.getBoundingClientRect();
+    const relX = (x - rect.left) / rect.width;
+    const relY = (y - rect.top) / rect.height;
+
+    const newWidth = rect.width * factor;
+    const newHeight = rect.height * factor;
+
+    lbImg.style.width = `${newWidth}px`;
+    lbImg.style.height = `${newHeight}px`;
+    lightbox.classList.add('zoomed');
+    zoomed = true;
+    currentZoomFactor = factor;
+
+    requestAnimationFrame(() => {
+      lightbox.scrollLeft = relX * newWidth - x;
+      lightbox.scrollTop = relY * newHeight - y;
+    });
+
+    const zoomSrc = sourceEl?.dataset.zoom;
+    if (zoomSrc && lbImg.src !== zoomSrc) {
+      const pre = new Image();
+      pre.onload = () => {
+        if (zoomed && isOpen) lbImg.src = zoomSrc;
+      };
+      pre.src = zoomSrc;
+    }
+  }
+
+  function toggleZoom(x: number, y: number) {
+    if (zoomed) resetZoom();
+    else zoomIn(x, y);
+  }
+
+  thumbs.forEach((thumb) => {
+    thumb.addEventListener('click', () => openLightbox(thumb));
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (!isOpen) return;
+    if (e.key === 'Escape') closeLightbox();
+    else if (e.key === 'ArrowLeft') prev();
+    else if (e.key === 'ArrowRight') next();
+  });
+
+  lbClose.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeLightbox();
+  });
+
+  lbPrev.addEventListener('click', (e) => {
+    e.stopPropagation();
+    prev();
+  });
+  lbNext.addEventListener('click', (e) => {
+    e.stopPropagation();
+    next();
+  });
+
+  // Anchor navigates naturally; no handler needed. Stop propagation so
+  // the backdrop-click close doesn't fire on the click as it bubbles.
+  lbAlbum.addEventListener('click', (e) => {
+    e.stopPropagation();
+  });
+
+  lightbox.addEventListener('click', (e) => {
+    if (e.target === lightbox) closeLightbox();
+  });
+
+  lbImg.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (isTouchDevice) return;
+    toggleZoom(e.clientX, e.clientY);
+  });
+
+  // Touch handling on the whole lightbox (not just the image) so the
+  // user can swipe anywhere on screen to navigate. Modes:
+  //   - 'drag'  : one finger past the tap threshold. Axis locks on
+  //               first movement into 'h' (prev / next) or 'v'
+  //               (drag-down-to-dismiss, Google-Images style).
+  //   - 'pinch' : two fingers → scale lbImg locally without zooming
+  //               the page; release at scale > 1 commits into the
+  //               existing `zoomed` mode so the view stays zoomed and
+  //               native overflow:auto handles panning.
+  //   - 'none'  : short/stationary touches fall through to the
+  //               synthesized click (backdrop → close, image →
+  //               double-tap zoom on mobile / toggleZoom on desktop)
+  type TouchMode = 'none' | 'drag' | 'pinch';
+  type DragAxis = 'h' | 'v' | null;
+
+  const SWIPE_COMMIT_FRACTION = 0.22; // 22% of viewport width → commit
+  const FLICK_MIN_DX = 60;
+  const FLICK_MAX_TIME = 300;
+  const DOUBLE_TAP_WINDOW = 320;
+  const TAP_MOVE_LIMIT = 10;
+  const BOUNDARY_RESISTANCE = 0.3;
+  // Pinch is clamped to a gesture-local ratio — not the total zoom.
+  // 0.4 lets you pinch-out from a zoomed state down to 40% of the
+  // pre-pinch size (effectively zooming out past baseline, which then
+  // exits zoom via the commit threshold).
+  const PINCH_MIN_SCALE = 0.4;
+  const PINCH_MAX_SCALE = 5;
+  // Pinch > this on release → commit to persistent zoom (below this
+  // the gesture reads as "I changed my mind", so we snap back).
+  const PINCH_COMMIT_SCALE = 1.05;
+  // Drag-down dismiss commits at the larger of this pixel minimum and
+  // 18% of viewport height — the % keeps the gesture consistent across
+  // phone and tablet sizes, the minimum handles short windows.
+  const CLOSE_COMMIT_DY = 120;
+  const CLOSE_COMMIT_FRACTION = 0.18;
+  const CLOSE_FLICK_VY = 0.7; // px per ms → committed even if short
+  const VERTICAL_SCALE_MIN = 0.82;
+  const VERTICAL_SCALE_FULL_DY = 500; // dy at which the shrink bottoms out
+
+  let touchMode: TouchMode = 'none';
+  let dragAxis: DragAxis = null;
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let touchStartT = 0;
+  let touchDx = 0; // latest applied horizontal offset
+  let touchDy = 0; // latest applied vertical offset
+  let touchMoved = false; // crossed TAP_MOVE_LIMIT — don't let click fire
+  // Pinch state. `pinchOxPx` / `pinchOyPx` are the pinch midpoint in
+  // lbImg box coords at pinch start (pre-transform), in pixels. We
+  // anchor scaling to that point via an explicit translate3d+scale
+  // transform (transform-origin: 0 0) rather than a percentage origin,
+  // which both feels smoother and makes the commit math trivial.
+  let pinchStartDist = 0;
+  let pinchScale = 1;
+  let pinchMidX = 0;
+  let pinchMidY = 0;
+  let pinchOxPx = 0;
+  let pinchOyPx = 0;
+  let pinchBaseWidth = 0;
+  let pinchBaseHeight = 0;
+  let pinchBaseZoomFactor = 1;
+  let pinchRafPending = false;
+  let lastTap = 0;
+
+  function pinchDistance(a: Touch, b: Touch) {
+    const dx = a.clientX - b.clientX;
+    const dy = a.clientY - b.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  // Controls handle their own pointer interactions — don't hijack
+  // touches that land on them.
+  function isOnControl(target: EventTarget | null) {
+    if (!(target instanceof Element)) return false;
+    return !!target.closest('.lb-close, .lb-album, .lb-nav');
+  }
+
+  function beginPinch(touches: TouchList) {
+    touchMode = 'pinch';
+    pinchStartDist = pinchDistance(touches[0], touches[1]);
+    pinchScale = 1;
+    pinchMidX = (touches[0].clientX + touches[1].clientX) / 2;
+    pinchMidY = (touches[0].clientY + touches[1].clientY) / 2;
+    const r = lbImg.getBoundingClientRect();
+    pinchBaseWidth = r.width;
+    pinchBaseHeight = r.height;
+    pinchBaseZoomFactor = currentZoomFactor;
+    // Midpoint in lbImg box coordinates (pixels from its top-left),
+    // pre-transform. Clamp into the box so an off-image pinch still
+    // anchors at the nearest edge rather than wildly off-screen.
+    pinchOxPx = Math.max(0, Math.min(r.width, pinchMidX - r.left));
+    pinchOyPx = Math.max(0, Math.min(r.height, pinchMidY - r.top));
+    // Anchor at the box's top-left and express the pivot via an
+    // explicit translate. Avoids percentage-origin math which some
+    // browsers recompute on every frame, and keeps the commit
+    // calculation straightforward.
+    lbImg.style.transformOrigin = '0 0';
+    lbImg.style.transition = 'none';
+    // Hint the compositor to promote lbImg to its own GPU layer for
+    // the duration of the pinch so scale changes don't repaint the
+    // image texture.
+    lbImg.style.willChange = 'transform';
+    // A pinch replaces any in-flight drag offset.
+    touchDx = 0;
+    touchDy = 0;
+    dragAxis = null;
+    lbImg.style.transform = 'translate3d(0,0,0) scale(1)';
+  }
+
+  function applyPinchTransform() {
+    // translate + scale with origin (0,0) keeps (pinchOxPx, pinchOyPx)
+    // in image-box coords pinned to the viewport location where it was
+    // at pinch start, regardless of the current scale.
+    const s = pinchScale;
+    const tx = pinchOxPx * (1 - s);
+    const ty = pinchOyPx * (1 - s);
+    lbImg.style.transform = `translate3d(${tx}px, ${ty}px, 0) scale(${s})`;
+  }
+
+  function endPinch() {
+    const finalScale = pinchScale;
+    const effective = pinchBaseZoomFactor * finalScale;
+    const mx = pinchMidX;
+    const my = pinchMidY;
+    const baseZoom = pinchBaseZoomFactor;
+    const baseWidth = pinchBaseWidth;
+    const baseHeight = pinchBaseHeight;
+    const ox = pinchOxPx;
+    const oy = pinchOyPx;
+
+    touchMode = 'none';
+    pinchScale = 1;
+
+    const dropWillChange = () => {
+      lbImg.style.willChange = '';
+    };
+
+    if (effective < PINCH_COMMIT_SCALE) {
+      // Not zoomed enough to commit — animate back to 1× and reset.
+      lbImg.style.transition =
+        'transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1)';
+      lbImg.style.transform = 'translate3d(0,0,0) scale(1)';
+      const clearInline = () => {
+        lbImg.style.transition = '';
+        lbImg.style.transform = '';
+        lbImg.style.transformOrigin = '';
+        dropWillChange();
+        if (zoomed) resetZoom();
+        lbImg.removeEventListener('transitionend', clearInline);
+      };
+      lbImg.addEventListener('transitionend', clearInline);
+      return;
+    }
+
+    if (baseZoom <= 1) {
+      // Was not zoomed before the pinch — hand off to the existing
+      // width/height-based zoomed mode via zoomIn.
+      lbImg.style.transition = 'none';
+      lbImg.style.transform = '';
+      lbImg.style.transformOrigin = '';
+      dropWillChange();
+      zoomIn(mx, my, effective);
+      return;
+    }
+
+    // Was already zoomed: absorb the pinch transform into a new
+    // width/height + scroll state so the image stays visually
+    // continuous at the updated zoom level.
+    //
+    //   new size       = baseSize × finalScale
+    //   new scrollLeft = ox × finalScale − mx  (keeps pinch pivot fixed)
+    //   new scrollTop  = oy × finalScale − my
+    //
+    // Browser clamps scroll to valid range; Math.max(0,…) handles the
+    // short-content side where valid range collapses.
+    const newW = baseWidth * finalScale;
+    const newH = baseHeight * finalScale;
+    const newSx = ox * finalScale - mx;
+    const newSy = oy * finalScale - my;
+
+    lbImg.style.transition = 'none';
+    lbImg.style.transform = '';
+    lbImg.style.transformOrigin = '';
+    lbImg.style.width = `${newW}px`;
+    lbImg.style.height = `${newH}px`;
+    // Force a layout flush so the new size takes effect before we
+    // write scroll — otherwise scrollLeft/Top clamp against the stale
+    // size and clip.
+    void lightbox.offsetHeight;
+    lightbox.scrollLeft = Math.max(0, newSx);
+    lightbox.scrollTop = Math.max(0, newSy);
+    currentZoomFactor = effective;
+    dropWillChange();
+  }
+
+  function springBackDrag() {
+    lbImg.style.transition = 'transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1)';
+    lbImg.style.transform = '';
+    const clearInline = () => {
+      lbImg.style.transition = '';
+      lbImg.removeEventListener('transitionend', clearInline);
+    };
+    lbImg.addEventListener('transitionend', clearInline);
+    touchMode = 'none';
+    dragAxis = null;
+    touchDx = 0;
+    touchDy = 0;
+  }
+
+  lightbox.addEventListener(
+    'touchstart',
+    (e) => {
+      if (!isOpen) return;
+      if (isOnControl(e.target)) return;
+
+      // Any 2-finger touch enters pinch mode, even if a 1-finger drag
+      // was in progress.
+      if (e.touches.length >= 2) {
+        beginPinch(e.touches);
+        return;
+      }
+
+      // Ignore additional 1-finger starts while a pinch is still active.
+      if (touchMode === 'pinch') return;
+
+      const t = e.touches[0];
+      touchStartX = t.clientX;
+      touchStartY = t.clientY;
+      touchStartT = Date.now();
+      touchDx = 0;
+      touchDy = 0;
+      touchMoved = false;
+      dragAxis = null;
+      // Provisional — we don't commit visuals until movement crosses
+      // TAP_MOVE_LIMIT, so a stationary tap still reaches its click.
+      touchMode = 'drag';
+    },
+    { passive: true }
+  );
+
+  lightbox.addEventListener(
+    'touchmove',
+    (e) => {
+      if (!isOpen) return;
+
+      if (touchMode === 'pinch' && e.touches.length >= 2) {
+        const d = pinchDistance(e.touches[0], e.touches[1]);
+        const raw = pinchStartDist > 0 ? d / pinchStartDist : 1;
+        pinchScale = Math.max(PINCH_MIN_SCALE, Math.min(PINCH_MAX_SCALE, raw));
+        // rAF-throttle: multiple touchmove events in one frame collapse
+        // to a single transform write, which the compositor handles as
+        // one GPU update instead of N overlapping ones.
+        if (!pinchRafPending) {
+          pinchRafPending = true;
+          requestAnimationFrame(() => {
+            pinchRafPending = false;
+            if (touchMode === 'pinch') applyPinchTransform();
+          });
+        }
+        // Stop iOS from zooming the page on top of our local pinch.
+        e.preventDefault();
+        return;
+      }
+
+      if (touchMode === 'drag' && e.touches.length === 1 && !animating) {
+        const t = e.touches[0];
+        const dx = t.clientX - touchStartX;
+        const dy = t.clientY - touchStartY;
+
+        // Under the tap threshold: don't commit visuals or preventDefault
+        // — keeps the synthesized click intact for backdrop-close etc.
+        if (
+          !touchMoved &&
+          Math.abs(dx) < TAP_MOVE_LIMIT &&
+          Math.abs(dy) < TAP_MOVE_LIMIT
+        ) {
+          return;
+        }
+        touchMoved = true;
+
+        // While zoomed, let the browser pan the overflow:auto container
+        // natively — we just flag that movement happened so touchend
+        // doesn't treat the gesture as a tap.
+        if (zoomed) return;
+
+        // Axis lock on first committed movement.
+        if (dragAxis === null) {
+          dragAxis = Math.abs(dy) > Math.abs(dx) ? 'v' : 'h';
+        }
+
+        if (dragAxis === 'v') {
+          // Drag-down dismiss. The image tracks the finger and shrinks
+          // slightly as you pull down so there's a visual cue, but it
+          // stays fully opaque — no fade until the close is actually
+          // committed on release.
+          touchDy = dy;
+          const downRatio =
+            dy > 0 ? Math.min(1, dy / VERTICAL_SCALE_FULL_DY) : 0;
+          const scale = 1 - downRatio * (1 - VERTICAL_SCALE_MIN);
+          lbImg.style.transition = 'none';
+          lbImg.style.transformOrigin = '50% 50%';
+          lbImg.style.transform = `translateY(${dy}px) scale(${scale})`;
+          e.preventDefault();
+          return;
+        }
+
+        // dragAxis === 'h' — horizontal prev / next with rubber-band
+        // past the list ends (30% travel so it reads as "no more").
+        const atStart = currentIndex <= 0;
+        const atEnd = currentIndex >= thumbs.length - 1;
+        let appliedDx = dx;
+        if ((atStart && dx > 0) || (atEnd && dx < 0)) {
+          appliedDx = dx * BOUNDARY_RESISTANCE;
+        }
+        touchDx = appliedDx;
+        touchDy = dy;
+        lbImg.style.transition = 'none';
+        lbImg.style.transform = `translateX(${appliedDx}px)`;
+        e.preventDefault();
+      }
+    },
+    { passive: false }
+  );
+
+  lightbox.addEventListener(
+    'touchend',
+    (e) => {
+      if (!isOpen) return;
+
+      if (touchMode === 'pinch') {
+        // Wait until every finger is lifted before committing/snapping.
+        if (e.touches.length >= 1) return;
+        endPinch();
+        return;
+      }
+
+      if (touchMode !== 'drag') return;
+
+      const t = e.changedTouches[0];
+
+      // Tap: no meaningful movement happened. Let the click event fire
+      // naturally so backdrop-close / image-double-tap still work.
+      if (!touchMoved) {
+        touchMode = 'none';
+        dragAxis = null;
+
+        // Double-tap on the image zooms in (mobile only — desktop
+        // uses the single click handler on lbImg).
+        if (isTouchDevice && t && t.target === lbImg) {
+          const now = Date.now();
+          if (now - lastTap < DOUBLE_TAP_WINDOW) {
+            toggleZoom(t.clientX, t.clientY);
+            e.preventDefault();
+            lastTap = 0;
+            return;
+          }
+          lastTap = now;
+        }
+        return;
+      }
+
+      const dt = Date.now() - touchStartT;
+
+      // Vertical drag: commit close or spring back.
+      if (dragAxis === 'v') {
+        const dy = touchDy;
+        const vh = window.innerHeight;
+        const threshold = Math.max(CLOSE_COMMIT_DY, vh * CLOSE_COMMIT_FRACTION);
+        const flick = dy > 40 && dy / Math.max(1, dt) > CLOSE_FLICK_VY;
+        if (dy > threshold || flick) {
+          touchMode = 'none';
+          dragAxis = null;
+          closeLightbox({ dragDy: dy });
+          e.preventDefault();
+          return;
+        }
+        springBackDrag();
+        e.preventDefault();
+        return;
+      }
+
+      // Horizontal drag: commit prev / next or spring back.
+      const dx = touchDx;
+      const absDx = Math.abs(dx);
+      const vw = window.innerWidth;
+      const pastFraction = absDx > vw * SWIPE_COMMIT_FRACTION;
+      const flick = absDx > FLICK_MIN_DX && dt < FLICK_MAX_TIME;
+      const committed = pastFraction || flick;
+
+      if (committed && dx < 0 && currentIndex < thumbs.length - 1) {
+        // Pass the live offset to goTo so the clone / incoming image
+        // continue from the finger's release point instead of snapping
+        // back and replaying the full slide.
+        touchMode = 'none';
+        dragAxis = null;
+        goTo(currentIndex + 1, 'next', dx);
+        e.preventDefault();
+        return;
+      }
+
+      if (committed && dx > 0 && currentIndex > 0) {
+        touchMode = 'none';
+        dragAxis = null;
+        goTo(currentIndex - 1, 'prev', dx);
+        e.preventDefault();
+        return;
+      }
+
+      // Not enough movement / at a boundary → spring back.
+      springBackDrag();
+      e.preventDefault();
+    },
+    { passive: false }
+  );
+
+  lightbox.addEventListener(
+    'touchcancel',
+    () => {
+      if (touchMode === 'pinch') endPinch();
+      else if (touchMode === 'drag' && touchMoved) springBackDrag();
+      else {
+        touchMode = 'none';
+        dragAxis = null;
+      }
+    },
+    { passive: true }
+  );
+</script>

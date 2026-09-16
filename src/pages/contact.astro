@@ -1,0 +1,118 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base
+  title="Contact — Simon Lürwer Photography"
+  description="Contact Simon Lürwer, photographer based in Hamburg, Germany. Email, Instagram, location."
+>
+  <section class="page">
+    <h1>cntct</h1>
+    <div class="body">
+      <img class="portrait" src="/portrait.jpg" alt="Simon Lürwer" />
+      <p>i love photos — which is why i take them</p>
+      <dl class="fields">
+        <dt>email</dt>
+        <dd><a id="email-link" href="#" rel="noreferrer">simon [at] imgs.wtf</a></dd>
+        <dt>instagram</dt>
+        <dd><a href="https://instagram.com/tr1ckfinger" target="_blank" rel="noreferrer">@tr1ckfinger</a></dd>
+        <dt>based in</dt>
+        <dd>hamburg, germany</dd>
+      </dl>
+    </div>
+  </section>
+
+  <script is:inline>
+    // JS-assembled mailto so the literal address never appears in the
+    // page source. Drive-by scrapers that don't run JS see only the
+    // placeholder text — most don't bother to de-obfuscate that, so
+    // the address stays off spam lists. Real users get a working
+    // clickable mailto link.
+    //
+    // TODO: this is a placeholder reusing the personal-site address
+    // until luerwer.com is purchased and hello@luerwer.com is set up
+    // via iCloud+ Custom Domain (same flow as imgs.wtf's email setup).
+    // Swap the two string literals below once that's live.
+    (() => {
+      const link = document.getElementById('email-link');
+      if (!link) return;
+      const addr = 'simon' + '@' + 'imgs.wtf';
+      link.href = 'mailto:' + addr;
+      link.textContent = addr;
+    })();
+  </script>
+</Base>
+
+<style>
+  .page {
+    max-width: 640px;
+    /* <main> is full-width now (no centering of its own) so the
+       prose centers itself here. */
+    margin: 0 auto;
+    padding: 48px 0 80px;
+  }
+  .portrait {
+    display: block;
+    width: 56px;
+    height: 56px;
+    /* object-fit: cover crops to fill the square regardless of the
+       source image's aspect ratio — no skew, no letterboxing, just
+       a centred crop. The border-radius then turns the square into
+       a circle. */
+    object-fit: cover;
+    border-radius: 50%;
+    margin: 0 0 18px;
+  }
+  .page h1 {
+    font-size: 32px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    margin: 0 0 28px;
+    color: var(--fg);
+  }
+  .body p {
+    color: var(--fg);
+    line-height: 1.65;
+    font-size: 16px;
+    margin: 0 0 18px;
+  }
+  /* Extra space between the prose and the fields list — the prose
+     introduces, the fields are the actionable bit. */
+  .body p:last-of-type {
+    margin-bottom: 32px;
+  }
+  .fields {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    row-gap: 12px;
+    column-gap: 28px;
+    margin: 0;
+  }
+  .fields dt {
+    color: var(--muted);
+    font-size: 14px;
+    align-self: center;
+  }
+  .fields dd {
+    margin: 0;
+    font-size: 15px;
+    color: var(--fg);
+  }
+  .fields a {
+    border-bottom: 1px solid currentColor;
+    padding-bottom: 1px;
+    transition: opacity 150ms ease;
+  }
+  .fields a:hover {
+    opacity: 0.6;
+  }
+  @media (max-width: 640px) {
+    .page { padding: 24px 0 56px; }
+    .page h1 { font-size: 26px; margin-bottom: 20px; }
+    .body p { font-size: 15px; }
+    .body p:last-of-type { margin-bottom: 24px; }
+    .fields { column-gap: 20px; row-gap: 10px; }
+    .fields dt { font-size: 13px; }
+    .fields dd { font-size: 14px; }
+  }
+</style>
