@@ -27,7 +27,6 @@ const {
 } = Astro.props;
 
 const path = Astro.url.pathname.replace(/\/$/, '') || '/';
-const isHome = path === '/';
 const isAlbums = path === '/albums';
 const isProjects = path === '/projects';
 const isContact = path === '/contact';
@@ -152,7 +151,6 @@ const personSchema = {
         </div>
         <div class="nav-right">
           <nav class="nav-links" aria-label="Primary">
-            <a href="/" data-label="imgs" class:list={['nav-link', { active: isHome }]}>imgs</a>
             <a href="/albums" data-label="albms" class:list={['nav-link', { active: isAlbums }]}>albms</a>
             <a href="/projects" data-label="prjcts" class:list={['nav-link', { active: isProjects }]}>prjcts</a>
             <a href="/contact" data-label="cntct" class:list={['nav-link', { active: isContact }]}>cntct</a>

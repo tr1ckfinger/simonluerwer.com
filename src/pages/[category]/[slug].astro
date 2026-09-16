@@ -1,6 +1,7 @@
 ---
 import Base from '../../layouts/Base.astro';
 import Lightbox from '../../components/Lightbox.astro';
+import { getEntry, render } from 'astro:content';
 import {
   getAlbums,
   cldUrl,
@@ -20,6 +21,12 @@ export async function getStaticPaths() {
 }
 
 const { album } = Astro.props;
+
+// Optional info/description block — see src/content.config.ts. Most
+// albums won't have a matching file, which is fine: getEntry returns
+// undefined and the block just doesn't render.
+const infoEntry = await getEntry('albums', album.slug);
+const infoContent = infoEntry ? await render(infoEntry) : null;
 
 // Default back destination is the category's listing page. The back-
 // arrow script in Base.astro overrides this client-side when the user
@@ -46,6 +53,15 @@ const ogImage = cldUrl(album.cover.public_id, {
   albumHeader={{ title: album.title, backHref, count: album.images.length }}
   noindex={album.hidden}
 >
+  {infoContent && (
+    <section class="album-info">
+      {infoEntry!.data.info && <p class="info-line">{infoEntry!.data.info}</p>}
+      <div class="description">
+        <infoContent.Content />
+      </div>
+    </section>
+  )}
+
   <section class="justified">
     {album.images.map((img) => {
       const aspect = img.width / img.height;
@@ -77,6 +93,35 @@ const ogImage = cldUrl(album.cover.public_id, {
 </Base>
 
 <style>
+  /* Optional per-series info/description block — see
+     src/content.config.ts. Sits between the nav header and the image
+     grid, capped to a readable line length so paragraphs don't stretch
+     edge-to-edge on wide desktops. */
+  .album-info {
+    max-width: 640px;
+    padding-top: 8px;
+  }
+  .info-line {
+    color: var(--muted);
+    font-size: 14px;
+    margin: 0 0 12px;
+  }
+  .description {
+    color: var(--fg);
+    line-height: 1.65;
+    font-size: 16px;
+  }
+  .description :global(p) {
+    margin: 0 0 16px;
+  }
+  .description :global(p:last-child) {
+    margin-bottom: 0;
+  }
+  @media (max-width: 640px) {
+    .info-line { font-size: 13px; }
+    .description { font-size: 15px; }
+  }
+
   /* Justified flex layout, identical to the home grid (index.astro) so
      the home feed and the inside-series pages share one rhythm —
      switching from / into /<category>/<slug> doesn't read as
