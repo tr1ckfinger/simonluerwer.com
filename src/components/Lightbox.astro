@@ -1,44 +1,63 @@
 ---
 // Shared lightbox used by both the home grid and series (album /
-// project) pages. Opens whenever an img.thumb is clicked. If the
-// thumb carries data-album-href, a labelled pill ("Go to album" or
-// "Go to project") is shown alongside the close button.
+// project) pages. Opens whenever an img.thumb is clicked.
+//
+// data-album-href on a thumb (set only by the home grid) still drives
+// isAlbumPage detection below — it distinguishes "viewing from the
+// flat home feed" from "viewing inside a series", which gates the
+// dots pagination. There used to also be a "Go to album/project" pill
+// keyed off the same attribute; that's been removed, but the href
+// data itself is still load-bearing for the dots check.
+//
+// #lb-info shows the OPEN PHOTO's own camera EXIF (date taken, camera,
+// lens, exposure settings) — not the project-level Location/Date/
+// Description, which stays on the project page's own persistent
+// sidebar (SeriesInfo.astro) and is a separate, unrelated feature.
+// EXIF is per-image, so it's simplest as plain data-exif-* attributes
+// on each thumb (see src/lib/cloudinary.ts / index.astro /
+// projects/[slug].astro) — built into DOM nodes here directly with
+// document.createElement, not cloned from anywhere. Its field
+// typography (label-above-value, muted values) is a small deliberate
+// duplicate of SeriesInfo.astro's styling: JS-created elements don't
+// carry that component's scoped CSS attribute, so the rules have to
+// live here too, the same way .lb-dots :global(.dot) already handles
+// JS-created dot spans below.
 ---
 
 <div id="lightbox" class="lightbox" aria-hidden="true">
   <img id="lb-img" alt="" />
 </div>
 <button id="lb-prev" class="lb-nav lb-prev" aria-label="Previous image">
-  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+  <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
     <path
       d="M15 5l-7 7 7 7"
       fill="none"
       stroke="currentColor"
       stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
+      stroke-linecap="square"
+      stroke-linejoin="miter"
     />
   </svg>
 </button>
 <button id="lb-next" class="lb-nav lb-next" aria-label="Next image">
-  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+  <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
     <path
       d="M9 5l7 7-7 7"
       fill="none"
       stroke="currentColor"
       stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
+      stroke-linecap="square"
+      stroke-linejoin="miter"
     />
   </svg>
 </button>
 <div id="lb-dots" class="lb-dots" aria-hidden="true"></div>
 <button id="lb-close" class="lb-close" aria-label="Close">
-  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-    <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+  <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+    <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="square" />
   </svg>
 </button>
-<a id="lb-album" class="lb-album" href="#">Go to album</a>
+<aside id="lb-info" class="lb-info"></aside>
 
 <style>
   .lightbox {
@@ -61,6 +80,14 @@
     overflow: hidden;
     z-index: 100;
     padding: 40px;
+    /* Extra left padding whenever #lb-info is showing, so the centred
+       image shifts right instead of sitting underneath the metadata
+       text. --lb-info-gap is measured and set by JS (syncInfoGap) from
+       #lb-info's actual rendered right edge — not a hardcoded number,
+       since the sidebar's width varies with its content and its own
+       left inset changes at the 1100px breakpoint. Defaults to 0 (no
+       shift) whenever the sidebar is empty or hidden. */
+    padding-left: calc(40px + var(--lb-info-gap, 0px));
     /* GPU-promote the lightbox so its content sits on its own
        compositor layer from the start — no first-open layer
        creation jank, and the layer is consistently sampled by
@@ -104,21 +131,27 @@
     cursor: zoom-out;
   }
 
+  /* No background pill — icon-only, matching the site's squared-off,
+     no-border-radius image treatment. Hover feedback is a simple
+     opacity dip (same pattern as .back-arrow) rather than a background
+     swap, since there's no background to swap. Close sits close to the
+     literal viewport corner (12px inset) so a sliding/cycling image
+     never reads as passing "underneath" it — the old 20/24px inset put
+     it inside the same margin the image occupies during a slide. */
   .lb-close {
     position: fixed;
-    top: 20px;
-    right: 24px;
+    top: 12px;
+    right: 12px;
     width: 40px;
     height: 40px;
-    border-radius: 999px;
     border: none;
-    background: var(--btn-bg);
+    background: transparent;
     color: var(--fg);
     align-items: center;
     justify-content: center;
     cursor: pointer;
     z-index: 200;
-    transition: background 150ms ease, opacity 200ms ease;
+    transition: opacity 200ms ease;
     display: none;
     opacity: 0;
   }
@@ -126,39 +159,9 @@
     display: flex;
     opacity: 1;
   }
-  .lb-close:hover { background: var(--btn-bg-hover); }
+  .lb-close:hover { opacity: 0.6; }
 
-  .lb-album {
-    position: fixed;
-    top: 20px;
-    right: 76px;
-    height: 40px;
-    padding: 0 16px;
-    border-radius: 999px;
-    background: var(--btn-bg);
-    color: var(--fg);
-    align-items: center;
-    justify-content: center;
-    font-size: 13px;
-    font-weight: 500;
-    letter-spacing: -0.01em;
-    cursor: pointer;
-    z-index: 200;
-    transition: background 150ms ease, opacity 200ms ease;
-    display: none;
-    opacity: 0;
-    text-decoration: none;
-    white-space: nowrap;
-  }
-  .lb-album.visible {
-    display: inline-flex;
-    opacity: 1;
-  }
-  .lb-album:hover { background: var(--btn-bg-hover); }
-
-  /* Prev / next arrows. Desktop: pill with a background, matching the
-     existing Close / Go to album controls. On mobile this is
-     overridden to a bare SVG (no background) below. */
+  /* Prev / next arrows — icon-only, no background pill. */
   .lb-nav {
     position: fixed;
     top: 50%;
@@ -166,15 +169,14 @@
     height: 48px;
     padding: 0;
     border: none;
-    border-radius: 999px;
-    background: var(--btn-bg);
+    background: transparent;
     color: var(--fg);
     align-items: center;
     justify-content: center;
     cursor: pointer;
     z-index: 200;
     transform: translateY(-50%);
-    transition: background 150ms ease, opacity 200ms ease;
+    transition: opacity 200ms ease;
     display: none;
     opacity: 0;
   }
@@ -182,7 +184,7 @@
     display: flex;
     opacity: 1;
   }
-  .lb-nav:hover { background: var(--btn-bg-hover); }
+  .lb-nav:not([disabled]):hover { opacity: 0.6; }
   .lb-nav[disabled] {
     opacity: 0.25;
     cursor: default;
@@ -276,6 +278,64 @@
     opacity: 1;
   }
 
+  /* Photo metadata sidebar (Date taken / Camera / Lens / Settings),
+     built directly from the open photo's data-exif-* attributes — see
+     the top-of-file comment. Positioned to match the left inset of the
+     project page's own sidebar (80px, tightening to 40px at the same
+     breakpoint main uses) and top-anchored the same way (nav height +
+     24px, matching --nav-h). Hidden below 900px: there's no room for
+     fixed side text next to a usable image on tablet/phone, same
+     reasoning as the project page collapsing its sidebar there. */
+  .lb-info {
+    position: fixed;
+    left: 80px;
+    top: calc(var(--nav-h, 70px) + 24px);
+    max-width: 420px;
+    max-height: calc(100vh - var(--nav-h, 70px) - 48px);
+    overflow-y: auto;
+    z-index: 150;
+    display: none;
+    opacity: 0;
+    transition: opacity 200ms ease;
+  }
+  .lb-info.visible {
+    display: block;
+    opacity: 1;
+  }
+  @media (max-width: 1100px) {
+    .lb-info { left: 40px; }
+  }
+  @media (max-width: 900px) {
+    .lb-info.visible { display: none; }
+  }
+  /* Field typography — same visual language as SeriesInfo.astro's
+     Location/Date/Description on the project page (label above value,
+     label bold-ish + full colour, value regular weight + muted) but
+     duplicated here on purpose: these elements are built with
+     document.createElement, so they don't carry SeriesInfo's scoped
+     CSS attribute and need :global() the same way .lb-dots does for
+     its JS-created dot spans. */
+  .lb-info :global(dt) {
+    color: var(--fg);
+    font-size: 16px;
+    font-weight: 500;
+    margin: 0 0 4px;
+  }
+  .lb-info :global(dd) {
+    margin: 0 0 20px;
+    font-size: 16px;
+    color: var(--muted);
+  }
+  .lb-info :global(dd:last-child) {
+    margin-bottom: 0;
+  }
+  @media (max-width: 640px) {
+    .lb-info :global(dt),
+    .lb-info :global(dd) {
+      font-size: 15px;
+    }
+  }
+
   @media (max-width: 700px) {
     /* Extra bottom padding reserves room for the fixed controls so a
        tall portrait image never extends into the button zone. 96px =
@@ -283,18 +343,10 @@
     .lightbox { padding: 16px 16px 96px; }
     .lb-close {
       top: auto;
-      bottom: max(24px, env(safe-area-inset-bottom, 0));
-      right: 20px;
+      bottom: max(16px, env(safe-area-inset-bottom, 0));
+      right: 12px;
       width: 52px;
       height: 52px;
-    }
-    .lb-album {
-      top: auto;
-      bottom: max(24px, env(safe-area-inset-bottom, 0));
-      right: 84px;
-      height: 52px;
-      padding: 0 18px;
-      font-size: 14px;
     }
     /* On mobile the arrows overlay the image with no pill — just a
        white chevron with a soft drop shadow so it reads against both
@@ -302,20 +354,18 @@
     .lb-nav {
       width: 44px;
       height: 44px;
-      background: transparent;
       color: #ffffff;
       filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.55));
     }
-    .lb-nav:hover { background: transparent; }
     .lb-prev { left: 4px; }
     .lb-next { right: 4px; }
     /* Dots sit on the same baseline as the close button — horizontally
        centred, vertically aligned to the X's mid-line. Close button:
-       bottom = max(24, env), height 52, so vertical centre is
+       bottom = max(16, env), height 52, so vertical centre is
        (bottom + 26) from the viewport bottom. For a 6px dot to share
        that centre, dot bottom = close-bottom + 23. */
     .lb-dots {
-      bottom: calc(max(24px, env(safe-area-inset-bottom, 0px)) + 23px);
+      bottom: calc(max(16px, env(safe-area-inset-bottom, 0px)) + 23px);
     }
   }
 </style>
@@ -324,10 +374,10 @@
   const lightbox = document.getElementById('lightbox') as HTMLDivElement;
   const lbImg = document.getElementById('lb-img') as HTMLImageElement;
   const lbClose = document.getElementById('lb-close') as HTMLButtonElement;
-  const lbAlbum = document.getElementById('lb-album') as HTMLAnchorElement;
   const lbPrev = document.getElementById('lb-prev') as HTMLButtonElement;
   const lbNext = document.getElementById('lb-next') as HTMLButtonElement;
   const lbDots = document.getElementById('lb-dots') as HTMLDivElement;
+  const lbInfo = document.getElementById('lb-info') as HTMLDivElement;
   const thumbs = Array.from(
     document.querySelectorAll<HTMLImageElement>('img.thumb')
   );
@@ -336,7 +386,7 @@
   // No ancestor's containing block (transform / filter / contain on a
   // wrapper somewhere) can then affect these position:fixed elements,
   // which is what we want for a true full-screen overlay.
-  [lightbox, lbClose, lbAlbum, lbPrev, lbNext, lbDots].forEach((el) => {
+  [lightbox, lbClose, lbPrev, lbNext, lbDots, lbInfo].forEach((el) => {
     document.body.appendChild(el);
   });
 
@@ -451,7 +501,12 @@
   // — at that point the state lets (isOpen, zoomed, sourceEl) are still
   // in their TDZ and would throw on access.
   const refitOnResize = () => {
-    if (isOpen && !zoomed && sourceEl) applyFitSize(sourceEl);
+    if (isOpen && !zoomed && sourceEl) {
+      // Resizing can cross the 900px/1100px breakpoints where #lb-info
+      // hides or shifts, so re-check its gap before re-fitting the image.
+      syncInfoGap();
+      applyFitSize(sourceEl);
+    }
   };
   window.addEventListener('resize', refitOnResize);
   window.addEventListener('orientationchange', refitOnResize);
@@ -554,6 +609,59 @@
     }
   }
 
+  // Build #lb-info from the open photo's own data-exif-* attributes —
+  // Date taken / Camera / Lens / Settings, each shown only if present.
+  // No EXIF at all (screenshots, heavily-edited exports, older scans)
+  // → clear and hide entirely rather than showing an empty box.
+  const EXIF_FIELDS: Array<[key: string, label: string]> = [
+    ['exifDate', 'Date'],
+    ['exifCamera', 'Camera'],
+    ['exifLens', 'Lens'],
+    ['exifSettings', 'Settings'],
+  ];
+
+  function updateInfo(thumb: HTMLImageElement) {
+    const dl = document.createElement('dl');
+    let any = false;
+    for (const [key, label] of EXIF_FIELDS) {
+      const value = thumb.dataset[key];
+      if (!value) continue;
+      any = true;
+      const dt = document.createElement('dt');
+      dt.textContent = label;
+      const dd = document.createElement('dd');
+      dd.textContent = value;
+      dl.append(dt, dd);
+    }
+    lbInfo.innerHTML = '';
+    if (any) {
+      lbInfo.appendChild(dl);
+      lbInfo.classList.add('visible');
+    } else {
+      lbInfo.classList.remove('visible');
+    }
+  }
+
+  // Extra left padding on .lightbox so the centred image shifts right
+  // instead of sitting underneath #lb-info — see the CSS comment on
+  // .lightbox's padding-left. Measures the sidebar's ACTUAL rendered
+  // right edge (which varies with content length and the 1100px
+  // breakpoint) rather than assuming a fixed width, so the gap is
+  // always exactly as wide as it needs to be, no more. Must run AFTER
+  // updateInfo has toggled .lb-info's visible class — getBoundingClientRect
+  // forces a synchronous layout flush, so it always reflects the latest
+  // class state even called immediately after the change.
+  function syncInfoGap() {
+    const cs = getComputedStyle(lbInfo);
+    const visible = lbInfo.classList.contains('visible') && cs.display !== 'none';
+    if (!visible) {
+      lightbox.style.removeProperty('--lb-info-gap');
+      return;
+    }
+    const rect = lbInfo.getBoundingClientRect();
+    lightbox.style.setProperty('--lb-info-gap', Math.round(rect.right) + 'px');
+  }
+
   function openLightbox(thumb: HTMLImageElement) {
     if (isOpen) return;
     sourceEl = thumb;
@@ -571,15 +679,6 @@
     // Use the already-loaded thumbnail src for instant display.
     lbImg.src = thumb.currentSrc || thumb.src;
 
-    // Pin lbImg to its final fit dimensions in pixels BEFORE we measure
-    // the FLIP "to" rect. Without this the <img> sizes itself to its
-    // currently-loaded resource (the 1200/1400-px thumb), which is
-    // smaller than the lightbox area on most desktops — so the image
-    // would render small and only "grow" later, when the higher-res
-    // preload finishes. Applying fit dimensions up front guarantees the
-    // image fills its final box from the very first paint.
-    applyFitSize(thumb);
-
     const from = thumb.getBoundingClientRect();
     // The lightbox is transparent — no pre-set opacity needed. The
     // page chrome (main + header) is what fades; the lightbox just
@@ -588,19 +687,19 @@
     lightbox.classList.add('open');
     lbClose.classList.add('visible');
     updateNavState();
+    updateInfo(thumb);
+    syncInfoGap();
 
-    const href = thumb.dataset.albumHref;
-    const label = thumb.dataset.albumLabel;
-    if (href) {
-      lbAlbum.href = href;
-      // Label is "Go to album" or "Go to project" depending on which
-      // parent folder the image lives under — set server-side in
-      // index.astro so the pill matches the destination type.
-      if (label) lbAlbum.textContent = label;
-      lbAlbum.classList.add('visible');
-    } else {
-      lbAlbum.classList.remove('visible');
-    }
+    // Pin lbImg to its final fit dimensions in pixels BEFORE we measure
+    // the FLIP "to" rect. Without this the <img> sizes itself to its
+    // currently-loaded resource (the 1200/1400-px thumb), which is
+    // smaller than the lightbox area on most desktops — so the image
+    // would render small and only "grow" later, when the higher-res
+    // preload finishes. Applying fit dimensions up front guarantees the
+    // image fills its final box from the very first paint. Runs AFTER
+    // syncInfoGap so the available width already accounts for #lb-info,
+    // if it's showing.
+    applyFitSize(thumb);
 
     renderDots();
 
@@ -754,12 +853,19 @@
     outgoing.style.userSelect = 'none';
     document.body.appendChild(outgoing);
 
+    // Update the info sidebar for the INCOMING photo, and the
+    // lightbox's compensating padding, before computing its fit size —
+    // otherwise applyFitSize below would use the OUTGOING photo's
+    // (possibly different) available width. The outgoing clone above
+    // is already pinned at its own captured rect via inline pixel
+    // styles, so it's unaffected by any padding change here.
+    updateInfo(newThumb);
+    syncInfoGap();
+
     // Resize lbImg to the new thumb's fit dimensions BEFORE swapping
-    // src. The clone is already absolutely positioned at the old rect
-    // via inline pixel styles, so it's unaffected. Doing this in the
-    // same frame as the src swap means the new image paints at the
-    // correct final size from frame one — no visible "grow" while a
-    // higher-res preload finishes.
+    // src. Doing this in the same frame as the src swap means the new
+    // image paints at the correct final size from frame one — no
+    // visible "grow" while a higher-res preload finishes.
     applyFitSize(newThumb);
 
     // Swap in the newly-decoded image — paints on the very next
@@ -810,15 +916,7 @@
     sourceEl = newThumb;
     currentIndex = newIndex;
 
-    // Home-grid thumbs carry data-album-href; update the pill's href
-    // and label so the button always links to the currently-shown
-    // image's parent series.
-    if (!isAlbumPage) {
-      const href = newThumb.dataset.albumHref;
-      const label = newThumb.dataset.albumLabel;
-      if (href) lbAlbum.href = href;
-      if (label) lbAlbum.textContent = label;
-    } else {
+    if (isAlbumPage) {
       // Update dot state — classes only, no DOM churn. CSS transitions
       // animate sizes and opacity as the window and active shift.
       updateDotStates();
@@ -893,7 +991,6 @@
     lightbox.classList.remove('open');
     lightbox.classList.add('closing');
     lbClose.classList.remove('visible');
-    lbAlbum.classList.remove('visible');
     lbPrev.classList.remove('visible');
     lbNext.classList.remove('visible');
     lbDots.classList.remove('visible');
@@ -912,6 +1009,9 @@
       lbImg.style.transformOrigin = '';
       lbImg.style.opacity = '';
       lightbox.style.opacity = '';
+      lbInfo.innerHTML = '';
+      lbInfo.classList.remove('visible');
+      lightbox.style.removeProperty('--lb-info-gap');
       sourceEl = null;
       isOpen = false;
       touchMode = 'none';
@@ -1064,12 +1164,6 @@
     next();
   });
 
-  // Anchor navigates naturally; no handler needed. Stop propagation so
-  // the backdrop-click close doesn't fire on the click as it bubbles.
-  lbAlbum.addEventListener('click', (e) => {
-    e.stopPropagation();
-  });
-
   lightbox.addEventListener('click', (e) => {
     if (e.target === lightbox) closeLightbox();
   });
@@ -1154,7 +1248,7 @@
   // touches that land on them.
   function isOnControl(target: EventTarget | null) {
     if (!(target instanceof Element)) return false;
-    return !!target.closest('.lb-close, .lb-album, .lb-nav');
+    return !!target.closest('.lb-close, .lb-nav, .lb-info');
   }
 
   function beginPinch(touches: TouchList) {

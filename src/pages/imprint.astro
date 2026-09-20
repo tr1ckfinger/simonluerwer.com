@@ -1,0 +1,161 @@
+---
+import Base from '../layouts/Base.astro';
+
+// DUMMY DATA — replace every value below with Simon's real details
+// before this site goes live for real. A German Impressum is a legal
+// requirement (§5 TMG / DDG) for a commercial site operated from
+// Germany, and getting the required fields wrong/missing carries real
+// legal risk (Abmahnungen). Recommend a quick sanity check from a
+// Steuerberater or lawyer once real data is in, especially around the
+// VAT / Kleinunternehmer wording, which depends on Simon's specific
+// tax status.
+const legalName = 'Simon Lürwer';
+const street = 'Musterstraße 1';
+const postalCode = '20095';
+const city = 'Hamburg';
+const country = 'Germany';
+const phone = '+49 (0) 40 1234567';
+const email = 'simon' + '@' + 'imgs.wtf'; // TODO: swap once hello@luerwer.com is live
+---
+
+<Base
+  title="Imprint — Simon Lürwer Photography"
+  description="Legal information (Impressum) for simonluerwer.com."
+  noindex={true}
+>
+  <section class="page">
+    <h1>Imprint</h1>
+
+    <h2>Information according to § 5 TMG</h2>
+    <p>
+      {legalName}<br />
+      {street}<br />
+      {postalCode} {city}<br />
+      {country}
+    </p>
+
+    <h2>Contact</h2>
+    <p>
+      Phone: {phone}<br />
+      Email: <a id="email-link" href="#" rel="noreferrer">{email}</a>
+    </p>
+
+    <h2>VAT</h2>
+    <p>
+      In accordance with § 19 UStG (German small business regulation),
+      no VAT is charged.
+    </p>
+
+    <h2>Responsible for content according to § 18 Abs. 2 MStV</h2>
+    <p>
+      {legalName}<br />
+      {street}<br />
+      {postalCode} {city}<br />
+      {country}
+    </p>
+
+    <h2>EU dispute resolution</h2>
+    <p>
+      The European Commission provides a platform for online dispute
+      resolution (ODR):
+      {' '}
+      <a href="https://ec.europa.eu/consumers/odr/" target="_blank" rel="noreferrer">
+        https://ec.europa.eu/consumers/odr/
+      </a>.
+      Our email address is listed above. We are not willing or
+      obligated to participate in dispute resolution proceedings
+      before a consumer arbitration board.
+    </p>
+
+    <h2>Liability for content</h2>
+    <p>
+      As a service provider, we are responsible for our own content on
+      these pages in accordance with general laws. However, we are not
+      obligated to monitor transmitted or stored third-party
+      information, or to investigate circumstances that indicate
+      illegal activity. Obligations to remove or block the use of
+      information under general law remain unaffected. Liability in
+      this regard is only possible from the point in time at which
+      knowledge of a specific infringement becomes known. If we become
+      aware of any such infringements, we will remove the content in
+      question immediately.
+    </p>
+
+    <h2>Liability for links</h2>
+    <p>
+      Our site contains links to external third-party websites over
+      whose content we have no influence. Therefore, we cannot accept
+      any liability for this external content. The respective provider
+      or operator of the linked pages is always responsible for their
+      content. At the time of linking, no legal violations were
+      identifiable. A permanent content control of the linked pages is
+      not reasonable without concrete evidence of a legal violation. If
+      we become aware of any legal infringements, we will remove such
+      links immediately.
+    </p>
+
+    <h2>Copyright</h2>
+    <p>
+      All content and works on this website created by the site
+      operator are subject to copyright law. Reproduction, editing,
+      distribution, or any form of commercialisation of such material
+      beyond the scope of copyright law requires the prior written
+      consent of the respective author or creator.
+    </p>
+  </section>
+
+  <script is:inline>
+    // Same JS-assembled mailto pattern as the contact page — keeps the
+    // literal address out of the page source.
+    (() => {
+      const link = document.getElementById('email-link');
+      if (!link) return;
+      const addr = link.textContent || '';
+      link.href = 'mailto:' + addr;
+    })();
+  </script>
+</Base>
+
+<style>
+  .page {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 48px 0 80px;
+  }
+  .page h1 {
+    font-size: 32px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    margin: 0 0 32px;
+    color: var(--fg);
+  }
+  .page h2 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 32px 0 8px;
+    color: var(--fg);
+  }
+  .page h2:first-of-type {
+    margin-top: 0;
+  }
+  .page p {
+    color: var(--muted);
+    line-height: 1.65;
+    font-size: 15px;
+    margin: 0;
+  }
+  .page a {
+    color: var(--fg);
+    border-bottom: 1px solid currentColor;
+    padding-bottom: 1px;
+    transition: opacity 150ms ease;
+  }
+  .page a:hover {
+    opacity: 0.6;
+  }
+  @media (max-width: 640px) {
+    .page { padding: 24px 0 56px; }
+    .page h1 { font-size: 26px; margin-bottom: 24px; }
+    .page p { font-size: 14px; }
+  }
+</style>

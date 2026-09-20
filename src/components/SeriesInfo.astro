@@ -1,0 +1,98 @@
+---
+// Shared field renderer for Location / Date / Description — used both
+// in the visible sticky sidebar on a project page AND, via a hidden
+// per-project copy, as the source the lightbox clones from when an
+// image is opened (see Lightbox.astro's openLightbox/goTo). Astro's
+// scoped CSS travels with the actual DOM nodes wherever they end up
+// (it's attribute-based, not position-based), so a node rendered here
+// keeps looking right even after being cloned into the lightbox's
+// entirely different DOM subtree.
+interface Props {
+  location?: string;
+  date?: string;
+  hasDescription?: boolean;
+}
+const { location, date, hasDescription = false } = Astro.props;
+const hasMeta = !!(location || date);
+---
+
+{(hasMeta || hasDescription) && (
+  <Fragment>
+    {hasMeta && (
+      <dl class="meta">
+        {location && (
+          <>
+            <dt>Location</dt>
+            <dd>{location}</dd>
+          </>
+        )}
+        {date && (
+          <>
+            <dt>Date</dt>
+            <dd>{date}</dd>
+          </>
+        )}
+      </dl>
+    )}
+    {hasDescription && (
+      <div class="description">
+        <span class="description-label">Description</span>
+        <slot />
+      </div>
+    )}
+  </Fragment>
+)}
+
+<style>
+  /* Location / Date / Description all share one field pattern: a
+     label sitting directly above its value, label bold-ish + full
+     colour, value regular weight + muted. dt/dd stack naturally in
+     normal block flow (no grid) — dt renders, then its dd right below
+     it on the next line. Each field's dd carries the gap before the
+     next field; the last one defers to .meta + .description instead
+     so a meta-only block (no description) doesn't carry trailing
+     space. .description-label mirrors .meta dt exactly so the
+     "Description" heading reads as the same kind of label as
+     "Location" / "Date", just one more field in the same list. */
+  .meta {
+    margin: 0;
+  }
+  .meta dt {
+    color: var(--fg);
+    font-size: 16px;
+    font-weight: 500;
+    margin: 0 0 4px;
+  }
+  .meta dd {
+    margin: 0 0 20px;
+    font-size: 16px;
+    color: var(--muted);
+  }
+  .meta dd:last-child {
+    margin-bottom: 0;
+  }
+  .description-label {
+    display: block;
+    color: var(--fg);
+    font-size: 16px;
+    font-weight: 500;
+    margin: 0 0 4px;
+  }
+  .meta + .description {
+    margin-top: 24px;
+  }
+  .description {
+    color: var(--muted);
+    line-height: 1.65;
+    font-size: 16px;
+  }
+  .description :global(p) {
+    margin: 0 0 16px;
+  }
+  .description :global(p:last-child) {
+    margin-bottom: 0;
+  }
+  @media (max-width: 640px) {
+    .meta dt, .meta dd, .description-label, .description { font-size: 15px; }
+  }
+</style>

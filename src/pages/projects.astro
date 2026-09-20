@@ -3,8 +3,8 @@ import Base from '../layouts/Base.astro';
 import { getAlbums, cldUrl, albumHref } from '../lib/cloudinary';
 
 const all = await getAlbums();
-// Hidden projects are tagged-out from listings — direct URL still works.
-const projects = all.filter((a) => a.category === 'project' && !a.hidden);
+// Hidden projects are tagged-out from the listing — direct URL still works.
+const projects = all.filter((a) => !a.hidden);
 
 // Pick the freshest project's cover for the link preview image.
 const ogImage =

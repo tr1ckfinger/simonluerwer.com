@@ -1,36 +1,44 @@
 ---
 import Base from '../layouts/Base.astro';
 import Lightbox from '../components/Lightbox.astro';
-import { getAlbums, cldUrl, albumHref, albumLabel } from '../lib/cloudinary';
+import { getAlbums, cldUrl, albumHref } from '../lib/cloudinary';
 
 const albums = await getAlbums();
 
-// Flat list of every image across BOTH categories (albums + projects).
-// Each entry carries the URL of, and the "Go to album / Go to project"
-// label for, the series it belongs to — used by the lightbox to render
-// the pill that links from a single image back to its parent series.
+// Flat list of every image across every project. Each entry carries
+// the URL of the series it belongs to — the lightbox uses its
+// presence (via data-album-href) to tell home-grid thumbs apart from
+// series-page thumbs, which drives whether the dots pagination shows.
+// There's no "go to project" pill in the lightbox, but this href data
+// is still load-bearing for that check. The exif* fields feed the
+// lightbox's per-photo metadata sidebar directly via data attributes
+// (see src/lib/cloudinary.ts for how they're extracted).
 type Item = {
   public_id: string;
   width: number;
   height: number;
   albumHref: string;
-  albumLabel: string;
+  exifDate?: string;
+  exifCamera?: string;
+  exifLens?: string;
+  exifSettings?: string;
 };
 
+const visibleAlbums = albums.filter((a) => !a.hidden);
+
 const all: Item[] = [];
-for (const album of albums) {
-  // Skip hidden albums — they shouldn't appear in the flat home feed,
-  // even though their /<category>/<slug> page still works directly.
-  if (album.hidden) continue;
+for (const album of visibleAlbums) {
   const href = albumHref(album);
-  const label = albumLabel(album);
   for (const img of album.images) {
     all.push({
       public_id: img.public_id,
       width: img.width,
       height: img.height,
       albumHref: href,
-      albumLabel: label,
+      exifDate: img.exifDate,
+      exifCamera: img.exifCamera,
+      exifLens: img.exifLens,
+      exifSettings: img.exifSettings,
     });
   }
 }
@@ -39,13 +47,13 @@ for (const album of albums) {
 // the same tab (session) and only resets when a new session starts.
 // See the inline shuffle script below.
 
-// SEO: derive an Open Graph image from the freshest album's cover. The
-// `albums` list comes back sorted newest-first, so albums[0].cover is
-// the most recently updated work — keeps the link preview fresh as new
-// series go up.
+// SEO: derive an Open Graph image from the freshest VISIBLE album's
+// cover (not just albums[0], which could be a hidden project — that
+// shouldn't leak into the public link-preview image). visibleAlbums
+// preserves the newest-first sort from getAlbums().
 const ogImage =
-  albums.length > 0
-    ? cldUrl(albums[0].cover.public_id, {
+  visibleAlbums.length > 0
+    ? cldUrl(visibleAlbums[0].cover.public_id, {
         w: 1200,
         h: 630,
         crop: 'fill',
@@ -76,7 +84,10 @@ const description =
             data-full={cldUrl(img.public_id, { w: 3200, q: 'auto:best' })}
             data-zoom={cldUrl(img.public_id, { q: 'auto:best' })}
             data-album-href={img.albumHref}
-            data-album-label={img.albumLabel}
+            data-exif-date={img.exifDate}
+            data-exif-camera={img.exifCamera}
+            data-exif-lens={img.exifLens}
+            data-exif-settings={img.exifSettings}
             alt=""
             loading="lazy"
             width={img.width}

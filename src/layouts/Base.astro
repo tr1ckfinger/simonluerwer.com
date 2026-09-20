@@ -27,7 +27,6 @@ const {
 } = Astro.props;
 
 const path = Astro.url.pathname.replace(/\/$/, '') || '/';
-const isAlbums = path === '/albums';
 const isProjects = path === '/projects';
 const isContact = path === '/contact';
 
@@ -125,13 +124,6 @@ const personSchema = {
       type="application/ld+json"
       set:html={JSON.stringify(personSchema)}
     />
-    <script is:inline>
-      (() => {
-        const saved = localStorage.getItem('theme');
-        const theme = saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-        document.documentElement.dataset.theme = theme;
-      })();
-    </script>
   </head>
   <body>
     <header class="nav">
@@ -151,24 +143,25 @@ const personSchema = {
         </div>
         <div class="nav-right">
           <nav class="nav-links" aria-label="Primary">
-            <a href="/albums" data-label="albms" class:list={['nav-link', { active: isAlbums }]}>albms</a>
-            <a href="/projects" data-label="prjcts" class:list={['nav-link', { active: isProjects }]}>prjcts</a>
-            <a href="/contact" data-label="cntct" class:list={['nav-link', { active: isContact }]}>cntct</a>
+            <a href="/projects" class:list={['nav-link', { active: isProjects }]}>projects</a>
+            <a href="/contact" class:list={['nav-link', { active: isContact }]}>about me</a>
           </nav>
-          <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme"></button>
         </div>
       </div>
     </header>
     <main>
       <slot />
+      <footer class="site-footer">
+        <a href="/imprint">Imprint</a>
+      </footer>
     </main>
     {albumHeader && (
       <script is:inline>
-        // Album back-arrow: send the user back to whichever listing
-        // they came from (/ or /albums). Default href on the server
+        // Project back-arrow: send the user back to whichever listing
+        // they came from (/ or /projects). Default href on the server
         // is `/` for direct landings / no-JS fallback; here we
         // override it when document.referrer says they arrived from
-        // /albums. On click we prefer history.back() so scroll
+        // /projects. On click we prefer history.back() so scroll
         // position on the listing is preserved (and any session-
         // scoped state like the home grid's shuffle stays intact).
         (() => {
@@ -183,8 +176,7 @@ const personSchema = {
               }
             }
           } catch {}
-          if (referrerPath === '/albums') arrow.href = '/albums';
-          else if (referrerPath === '/projects') arrow.href = '/projects';
+          if (referrerPath === '/projects') arrow.href = '/projects';
           else if (referrerPath === '/') arrow.href = '/';
           arrow.addEventListener('click', (e) => {
             if (referrerPath && history.length > 1) {
@@ -197,21 +189,23 @@ const personSchema = {
     )}
     <script is:inline>
       (() => {
-        const setTheme = (t) => {
-          document.documentElement.dataset.theme = t;
-          localStorage.setItem('theme', t);
+        // Publish the nav's rendered height as a CSS variable so any
+        // page can position sticky content directly below it (e.g. a
+        // sticky info sidebar on series pages) without guessing a
+        // fixed pixel offset — nav height changes across breakpoints
+        // and with env(safe-area-inset-top) on notched devices.
+        const navEl = document.querySelector('header.nav');
+        const syncNavHeight = () => {
+          if (navEl) {
+            document.documentElement.style.setProperty(
+              '--nav-h',
+              navEl.getBoundingClientRect().height + 'px'
+            );
+          }
         };
-        const btn = document.getElementById('theme-toggle');
-        btn?.addEventListener('click', () => {
-          setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
-        });
-        document.addEventListener('keydown', (e) => {
-          if (e.metaKey || e.ctrlKey || e.altKey) return;
-          const tag = (e.target && e.target.tagName) || '';
-          if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable) return;
-          if (e.key === 'd' || e.key === 'D') setTheme('dark');
-          if (e.key === 'l' || e.key === 'L') setTheme('light');
-        });
+        syncNavHeight();
+        window.addEventListener('resize', syncNavHeight);
+        window.addEventListener('orientationchange', syncNavHeight);
 
         const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
         const playFade = (img) => {
@@ -278,35 +272,41 @@ const personSchema = {
       })();
     </script>
     <style is:global>
-      :root,
-      :root[data-theme='light'] {
+      :root {
         /* color-scheme tells Safari which system palette the page is
            using — it's the other half of the "tint the chrome" story
            alongside <meta name=\"theme-color\">. Without it set,
            Safari ignores dynamic theme-color changes and keeps
-           tinting from its own heuristic. */
+           tinting from its own heuristic. Theme is entirely driven by
+           the OS-level prefers-color-scheme media query below — no
+           manual toggle, no localStorage, no JS needed before paint. */
         color-scheme: light;
         --bg: #ffffff;
         --fg: #111111;
         --muted: #666666;
         --card-bg: #e6e6e6;
-        --nav-bg: #ffffff;
+        /* Translucent (not solid) — the nav uses backdrop-filter blur
+           below, so this needs enough alpha to read as "frosted glass"
+           over scrolled content rather than fully see-through. */
+        --nav-bg: rgba(255, 255, 255, 0.72);
         --lightbox-bg: #ffffff;
         --btn-bg: rgba(0, 0, 0, 0.06);
         --btn-bg-hover: rgba(0, 0, 0, 0.12);
         --img-hover: 0.85;
       }
-      :root[data-theme='dark'] {
-        color-scheme: dark;
-        --bg: #0c0c0f;
-        --fg: #eaeaea;
-        --muted: #8a8a90;
-        --card-bg: #17171b;
-        --nav-bg: #0c0c0f;
-        --lightbox-bg: #0c0c0f;
-        --btn-bg: rgba(255, 255, 255, 0.08);
-        --btn-bg-hover: rgba(255, 255, 255, 0.16);
-        --img-hover: 1.18;
+      @media (prefers-color-scheme: dark) {
+        :root {
+          color-scheme: dark;
+          --bg: #0c0c0f;
+          --fg: #eaeaea;
+          --muted: #8a8a90;
+          --card-bg: #17171b;
+          --nav-bg: rgba(12, 12, 15, 0.72);
+          --lightbox-bg: #0c0c0f;
+          --btn-bg: rgba(255, 255, 255, 0.08);
+          --btn-bg-hover: rgba(255, 255, 255, 0.16);
+          --img-hover: 1.18;
+        }
       }
       * {
         box-sizing: border-box;
@@ -376,14 +376,17 @@ const personSchema = {
         position: sticky;
         top: 0;
         z-index: 10;
-        /* Opaque fill matching the body. backdrop-filter is
-           intentionally omitted: a transparent/blurred sticky header
-           on iOS 26 Safari freezes the chrome tint on theme toggle
-           (sampling + compositor quirk confirmed by other devs). A
-           solid nav that matches --bg lets the chrome flip in step
-           with the body on toggle. Same 300ms crossfade as the body
-           so the surfaces retint together. */
+        /* Translucent + blurred now that there's no in-page theme
+           toggle. The blur was previously dropped because an in-page
+           JS-triggered light/dark flip froze iOS Safari's URL-bar
+           chrome-tint sampling (a compositor quirk on 26). Without a
+           manual toggle that specific trigger is gone — the only way
+           the scheme changes now is the OS setting itself flipping
+           while the tab is open, a far rarer event than a toggle
+           click, so the trade-off is worth it for the nicer look. */
         background: var(--nav-bg);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
         transition: background-color 300ms ease-in-out;
       }
       .nav-inner {
@@ -468,24 +471,30 @@ const personSchema = {
       .back-arrow:hover {
         opacity: 0.6;
       }
-      .theme-toggle {
-        width: 12px;
-        height: 12px;
-        border-radius: 999px;
-        border: none;
-        padding: 0;
-        background: var(--fg);
-        cursor: pointer;
-        transition: background 200ms ease, transform 200ms ease;
-      }
-      .theme-toggle:hover {
-        transform: scale(1.08);
-      }
       main {
         /* Full-width on desktop with 80px L/R breathing room. No
            max-width — the grid expands to fill the viewport so the
            images themselves get bigger, not the count per row. */
         padding: 0 80px 80px;
+      }
+      .site-footer {
+        /* Sits after whatever the page renders (image grid, contact
+           prose, etc.) — genuinely "at the bottom", after everything
+           else has loaded, since it's just the next element in normal
+           document flow. Deliberately understated: a single small
+           link, not a full footer block, so it doesn't compete with
+           the photography. */
+        margin-top: 64px;
+        padding-top: 24px;
+        border-top: 1px solid var(--btn-bg);
+      }
+      .site-footer a {
+        color: var(--muted);
+        font-size: 13px;
+        transition: color 150ms ease;
+      }
+      .site-footer a:hover {
+        color: var(--fg);
       }
       @media (max-width: 1100px) {
         /* Tighten the side rails as the viewport narrows so 80px

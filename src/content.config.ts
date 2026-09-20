@@ -16,10 +16,15 @@ import { glob } from 'astro/loaders';
 const albums = defineCollection({
   loader: glob({ pattern: '**/*.md', base: './src/content/albums' }),
   schema: z.object({
-    // Short one-line meta info shown above the description — e.g.
-    // location + date, or a client/publication credit. Optional.
-    info: z.string().optional(),
+    // Both optional, both free-text (date is deliberately a string,
+    // not a real Date — "Summer 2026" or "12.06.2026" are both valid
+    // and there's no need for real date math anywhere on the site).
+    location: z.string().optional(),
+    date: z.string().optional(),
   }),
 });
+// The markdown body itself is the Description field — rendered via
+// render(entry) in the page template, no separate frontmatter key
+// needed for it.
 
 export const collections = { albums };
