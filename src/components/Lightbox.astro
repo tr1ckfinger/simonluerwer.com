@@ -282,16 +282,18 @@
      24px, matching --nav-h). Hidden below 900px: there's no room for
      fixed side text next to a usable image on tablet/phone, same
      reasoning as the project page collapsing its sidebar there. */
-  /* Full-height opaque column (background = page bg) pinned to the left
-     edge, stacked ABOVE the sliding images (z-index 160 vs the
-     outgoing clone's 150 and .lightbox's 100), so while cycling, the
-     image slides in and out from underneath the column instead of
-     passing visibly behind/through the text. Fixed width (not
-     shrink-to-fit) so the image doesn't jump horizontally between
-     photos whose metadata happens to be shorter or longer. The text
-     inset (80px, 40px at the 1100px breakpoint) and top offset live in
-     the column's padding now; syncInfoGap measures the column's right
-     edge, so the image still starts just past it. */
+  /* Full-height column pinned to the left edge, stacked ABOVE the
+     sliding images (z-index 160 vs the outgoing clone's 150 and
+     .lightbox's 100). Its background is only switched on (.solid) while
+     you cycle through photos, so images slide out from underneath it.
+     During open/close it stays transparent and its opacity is animated
+     in step with the page fade (see fadeInfo), so there's never a
+     hard-edged panel over a half-faded grid or a flying thumbnail.
+     Fixed width (not shrink-to-fit) so the image doesn't jump
+     horizontally between photos. The text inset (80px, 40px at the
+     1100px breakpoint) and top offset live in the padding;
+     syncInfoGap measures the column's right edge, so the image still
+     starts just past it. */
   .lb-info {
     position: fixed;
     top: 0;
@@ -299,16 +301,16 @@
     left: 0;
     width: 440px;
     padding: calc(var(--nav-h, 70px) + 24px) 40px 24px 80px;
-    background: var(--bg);
+    background: transparent;
     overflow-y: auto;
     z-index: 160;
     display: none;
-    opacity: 0;
-    transition: opacity 200ms ease;
+  }
+  .lb-info.solid {
+    background: var(--bg);
   }
   .lb-info.visible {
     display: block;
-    opacity: 1;
   }
   @media (max-width: 1100px) {
     .lb-info {
@@ -607,7 +609,42 @@
       lbInfo.classList.add('visible');
     } else {
       lbInfo.innerHTML = '';
-      lbInfo.classList.remove('visible');
+      lbInfo.classList.remove('visible', 'solid');
+    }
+  }
+
+  // Animate #lb-info's opacity in step with the rest of the lightbox
+  // (WAAPI, like fadePage — a CSS transition can't run on an element
+  // that's switching from display:none in the same frame). 'in' also
+  // turns the solid background on once it finishes, i.e. once the grid
+  // behind is fully gone and only cycling images can pass under it.
+  function fadeInfo(
+    direction: 'in' | 'out',
+    duration: number,
+    easing: string
+  ) {
+    lbInfo.getAnimations().forEach((a) => a.cancel());
+    const keyframes =
+      direction === 'in'
+        ? [{ opacity: 0 }, { opacity: 1 }]
+        : [{ opacity: 1 }, { opacity: 0 }];
+    const anim = lbInfo.animate(keyframes, {
+      duration,
+      easing,
+      fill: direction === 'in' ? 'backwards' : 'forwards',
+    });
+    if (direction === 'in') {
+      anim.finished.then(
+        () => {
+          if (
+            lightbox.classList.contains('open') &&
+            lbInfo.classList.contains('visible')
+          ) {
+            lbInfo.classList.add('solid');
+          }
+        },
+        () => {}
+      );
     }
   }
 
@@ -658,6 +695,13 @@
     updateNavState();
     updateInfo(thumb);
     syncInfoGap();
+    // Sidebar fades in over the same window as the grid fades out.
+    if (
+      lbInfo.classList.contains('visible') &&
+      getComputedStyle(lbInfo).display !== 'none'
+    ) {
+      fadeInfo('in', OPEN_DURATION, OPEN_EASING);
+    }
 
     // Pin lbImg to its final fit dimensions in pixels BEFORE we measure
     // the FLIP "to" rect. Without this the <img> sizes itself to its
@@ -828,8 +872,19 @@
     // (possibly different) available width. The outgoing clone above
     // is already pinned at its own captured rect via inline pixel
     // styles, so it's unaffected by any padding change here.
+    const infoWasVisible = lbInfo.classList.contains('visible');
     updateInfo(newThumb);
     syncInfoGap();
+    // Info appearing for the first time mid-cycle (previous photo had
+    // none): fade it in rather than popping. If it stays visible the
+    // content just swaps under the already-solid column.
+    if (
+      !infoWasVisible &&
+      lbInfo.classList.contains('visible') &&
+      getComputedStyle(lbInfo).display !== 'none'
+    ) {
+      fadeInfo('in', 220, 'cubic-bezier(0.4, 0, 0.2, 1)');
+    }
 
     // Resize lbImg to the new thumb's fit dimensions BEFORE swapping
     // src. Doing this in the same frame as the src swap means the new
@@ -965,6 +1020,21 @@
     lbDots.classList.remove('visible');
     lightbox.setAttribute('aria-hidden', 'true');
 
+    // Fade the sidebar out at the START of closing, in step with the
+    // grid fading back in (transparent while it fades, so the returning
+    // image never passes under a solid panel). It's removed for real in
+    // doClose once the image has landed.
+    if (lbInfo.classList.contains('visible')) {
+      lbInfo.classList.remove('solid');
+      fadeInfo(
+        'out',
+        opts?.dragDy !== undefined ? 260 : CLOSE_DURATION,
+        opts?.dragDy !== undefined
+          ? 'cubic-bezier(0.4, 0, 1, 1)'
+          : CLOSE_EASING
+      );
+    }
+
     const doClose = () => {
       lightbox.classList.remove('closing');
       document.body.style.overflow = '';
@@ -978,8 +1048,9 @@
       lbImg.style.transformOrigin = '';
       lbImg.style.opacity = '';
       lightbox.style.opacity = '';
+      lbInfo.getAnimations().forEach((a) => a.cancel());
       lbInfo.innerHTML = '';
-      lbInfo.classList.remove('visible');
+      lbInfo.classList.remove('visible', 'solid');
       lightbox.style.removeProperty('--lb-info-gap');
       sourceEl = null;
       isOpen = false;
