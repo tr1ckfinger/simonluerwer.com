@@ -9,19 +9,16 @@
 // keyed off the same attribute; that's been removed, but the href
 // data itself is still load-bearing for the dots check.
 //
-// #lb-info shows the OPEN PHOTO's own camera EXIF (date taken, camera,
-// lens, exposure settings) — not the project-level Location/Date/
-// Description, which stays on the project page's own persistent
-// sidebar (SeriesInfo.astro) and is a separate, unrelated feature.
-// EXIF is per-image, so it's simplest as plain data-exif-* attributes
-// on each thumb (see src/lib/cloudinary.ts / index.astro /
-// projects/[slug].astro) — built into DOM nodes here directly with
-// document.createElement, not cloned from anywhere. Its field
-// typography (label-above-value, muted values) is a small deliberate
-// duplicate of SeriesInfo.astro's styling: JS-created elements don't
-// carry that component's scoped CSS attribute, so the rules have to
-// live here too, the same way .lb-dots :global(.dot) already handles
-// JS-created dot spans below.
+// #lb-info shows the PROJECT's info (Location / Date / Description) in a
+// column on the left — but only when the photo was opened from the home
+// grid. Home-grid thumbs carry data-project-slug; the home page renders
+// a hidden `.series-info-source[data-slug]` block per project (via
+// SeriesInfo.astro) and this script clones that block's innerHTML into
+// #lb-info on open/navigate. Thumbs on a project page have no
+// data-project-slug, so no sidebar appears there (the project page
+// already has its own persistent one). Astro's scoped CSS is
+// attribute-based, not DOM-position-based, so the cloned markup keeps
+// the exact look it has on the project page.
 ---
 
 <div id="lightbox" class="lightbox" aria-hidden="true">
@@ -278,22 +275,33 @@
     opacity: 1;
   }
 
-  /* Photo metadata sidebar (Date taken / Camera / Lens / Settings),
-     built directly from the open photo's data-exif-* attributes — see
-     the top-of-file comment. Positioned to match the left inset of the
+  /* Project info sidebar, cloned from a hidden .series-info-source
+     block — see the top-of-file comment. Positioned to match the left inset of the
      project page's own sidebar (80px, tightening to 40px at the same
      breakpoint main uses) and top-anchored the same way (nav height +
      24px, matching --nav-h). Hidden below 900px: there's no room for
      fixed side text next to a usable image on tablet/phone, same
      reasoning as the project page collapsing its sidebar there. */
+  /* Full-height opaque column (background = page bg) pinned to the left
+     edge, stacked ABOVE the sliding images (z-index 160 vs the
+     outgoing clone's 150 and .lightbox's 100), so while cycling, the
+     image slides in and out from underneath the column instead of
+     passing visibly behind/through the text. Fixed width (not
+     shrink-to-fit) so the image doesn't jump horizontally between
+     photos whose metadata happens to be shorter or longer. The text
+     inset (80px, 40px at the 1100px breakpoint) and top offset live in
+     the column's padding now; syncInfoGap measures the column's right
+     edge, so the image still starts just past it. */
   .lb-info {
     position: fixed;
-    left: 80px;
-    top: calc(var(--nav-h, 70px) + 24px);
-    max-width: 420px;
-    max-height: calc(100vh - var(--nav-h, 70px) - 48px);
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 440px;
+    padding: calc(var(--nav-h, 70px) + 24px) 40px 24px 80px;
+    background: var(--bg);
     overflow-y: auto;
-    z-index: 150;
+    z-index: 160;
     display: none;
     opacity: 0;
     transition: opacity 200ms ease;
@@ -303,39 +311,14 @@
     opacity: 1;
   }
   @media (max-width: 1100px) {
-    .lb-info { left: 40px; }
+    .lb-info {
+      width: 400px;
+      padding-left: 40px;
+    }
   }
   @media (max-width: 900px) {
     .lb-info.visible { display: none; }
   }
-  /* Field typography — same visual language as SeriesInfo.astro's
-     Location/Date/Description on the project page (label above value,
-     label bold-ish + full colour, value regular weight + muted) but
-     duplicated here on purpose: these elements are built with
-     document.createElement, so they don't carry SeriesInfo's scoped
-     CSS attribute and need :global() the same way .lb-dots does for
-     its JS-created dot spans. */
-  .lb-info :global(dt) {
-    color: var(--fg);
-    font-size: 16px;
-    font-weight: 500;
-    margin: 0 0 4px;
-  }
-  .lb-info :global(dd) {
-    margin: 0 0 20px;
-    font-size: 16px;
-    color: var(--muted);
-  }
-  .lb-info :global(dd:last-child) {
-    margin-bottom: 0;
-  }
-  @media (max-width: 640px) {
-    .lb-info :global(dt),
-    .lb-info :global(dd) {
-      font-size: 15px;
-    }
-  }
-
   @media (max-width: 700px) {
     /* Extra bottom padding reserves room for the fixed controls so a
        tall portrait image never extends into the button zone. 96px =
@@ -609,35 +592,21 @@
     }
   }
 
-  // Build #lb-info from the open photo's own data-exif-* attributes —
-  // Date taken / Camera / Lens / Settings, each shown only if present.
-  // No EXIF at all (screenshots, heavily-edited exports, older scans)
-  // → clear and hide entirely rather than showing an empty box.
-  const EXIF_FIELDS: Array<[key: string, label: string]> = [
-    ['exifDate', 'Date'],
-    ['exifCamera', 'Camera'],
-    ['exifLens', 'Lens'],
-    ['exifSettings', 'Settings'],
-  ];
-
+  // Clone in the project info for the open photo's project, found via
+  // data-project-slug. No slug (photo opened from a project page) or no
+  // matching info block → clear and hide.
   function updateInfo(thumb: HTMLImageElement) {
-    const dl = document.createElement('dl');
-    let any = false;
-    for (const [key, label] of EXIF_FIELDS) {
-      const value = thumb.dataset[key];
-      if (!value) continue;
-      any = true;
-      const dt = document.createElement('dt');
-      dt.textContent = label;
-      const dd = document.createElement('dd');
-      dd.textContent = value;
-      dl.append(dt, dd);
-    }
-    lbInfo.innerHTML = '';
-    if (any) {
-      lbInfo.appendChild(dl);
+    const slug = thumb.dataset.projectSlug;
+    const source = slug
+      ? document.querySelector(
+          `.series-info-source[data-slug="${CSS.escape(slug)}"]`
+        )
+      : null;
+    if (source) {
+      lbInfo.innerHTML = source.innerHTML;
       lbInfo.classList.add('visible');
     } else {
+      lbInfo.innerHTML = '';
       lbInfo.classList.remove('visible');
     }
   }

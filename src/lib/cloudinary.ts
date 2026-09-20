@@ -27,12 +27,6 @@ export type CldImage = {
   // Cloudinary (lower = earlier). Undefined when the field is absent
   // or non-numeric — those images fall to the back, newest-first.
   order?: number;
-  // Camera EXIF, shown in the lightbox. All optional — many images
-  // (screenshots, scans, heavily-edited exports) won't have full EXIF.
-  exifDate?: string; // e.g. "August 1, 2026" — from DateTimeOriginal
-  exifCamera?: string; // e.g. "LEICA M10-R" — Model
-  exifLens?: string; // e.g. "Summilux-M 1:1.4/35 ASPH." — LensModel
-  exifSettings?: string; // e.g. "35mm · ƒ/5.6 · 1/1000s · ISO 400"
 };
 
 export type Album = {
@@ -49,6 +43,9 @@ export type Album = {
   // The series page also emits noindex so Google doesn't pick it up
   // even if the URL is discovered.
   hidden: boolean;
+  // Place name read from one of the photos' own metadata (see
+  // findLocation). A `location` in the project's markdown file overrides it.
+  location?: string;
 };
 
 // This is the curated professional site — it deliberately reads from
@@ -74,63 +71,46 @@ function slugFromFolder(folder: string) {
   return folder.trim().toLowerCase().replace(/\s+/g, '-');
 }
 
-// EXIF ("image_metadata") is NOT returned by the Search API even when
-// requested via .with_field('image_metadata') — confirmed empirically,
-// it comes back as {}. Only the Admin API's per-asset resource() call
-// actually returns it, so fetching it costs one extra request per
-// image (parallelised below). Fine for a handful of projects at build
-// time; would need batching/caching if the library grows large.
-function formatExifDate(raw: string | undefined): string | undefined {
-  // EXIF datetimes look like "2026:08:01 16:56:58" — colons in both
-  // the date and time parts make this ambiguous for the native Date
-  // parser, so pull the date portion apart manually.
-  if (!raw) return undefined;
-  const datePart = raw.split(' ')[0];
-  const [y, m, d] = datePart.split(':').map(Number);
-  if (!y || !m || !d) return undefined;
-  const date = new Date(y, m - 1, d);
-  if (isNaN(date.getTime())) return undefined;
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
+// Location comes from the photos themselves: Lightroom/Capture One
+// write a hierarchical keyword like "03. PLACES|Europe|Hamburg|Rotherbaum"
+// into the file's XMP. Cloudinary's Search API does NOT return
+// image_metadata (it comes back as {}) — only the Admin API's per-asset
+// resource() call does — so this costs one request per probed image.
+// We only probe until we find a place (usually the first image), not
+// every photo.
+function locationFromMetadata(m: Record<string, string> | undefined) {
+  if (!m) return undefined;
+  const hier = m.HierarchicalSubject;
+  if (hier) {
+    // Entries are comma-joined; keep the deepest PLACES path.
+    const places = hier
+      .split(/,\s*/)
+      .filter((e) => /PLACES\|/i.test(e))
+      .sort((a, b) => b.split('|').length - a.split('|').length)[0];
+    if (places) {
+      // [category, continent, city, district?] → "District, City"
+      const parts = places.split('|').slice(2).filter(Boolean);
+      if (parts.length) return parts.reverse().join(', ');
+    }
+  }
+  // Plain IPTC fields, for files tagged by other tools.
+  const iptc = [m.Sublocation, m.City, m.Country].filter(Boolean);
+  return iptc.length ? iptc.join(', ') : undefined;
 }
 
-function parseExif(raw: Record<string, string> | undefined) {
-  if (!raw) return {};
-  const exifDate = formatExifDate(raw.DateTimeOriginal);
-  const exifCamera = raw.Model;
-  const exifLens = raw.LensModel ?? raw.Lens;
-
-  // Combine the four exposure settings into one compact line —
-  // "35mm · ƒ/5.6 · 1/1000s · ISO 400" — rather than four separate
-  // stacked fields, which reads as one coherent "shooting info" line
-  // the way most photography sites present it.
-  const settingsParts: string[] = [];
-  if (raw.FocalLength) {
-    const mm = Math.round(parseFloat(raw.FocalLength));
-    if (!isNaN(mm)) settingsParts.push(`${mm}mm`);
+async function findLocation(images: CldImage[]): Promise<string | undefined> {
+  for (const img of images.slice(0, 5)) {
+    try {
+      const detail: any = await cloudinary.api.resource(img.public_id, {
+        image_metadata: true,
+      });
+      const loc = locationFromMetadata(detail.image_metadata);
+      if (loc) return loc;
+    } catch {
+      // Unreadable metadata shouldn't fail the build — try the next image.
+    }
   }
-  if (raw.FNumber) settingsParts.push(`ƒ/${raw.FNumber}`);
-  if (raw.ExposureTime) settingsParts.push(`${raw.ExposureTime}s`);
-  if (raw.ISO) settingsParts.push(`ISO ${raw.ISO}`);
-  const exifSettings = settingsParts.length ? settingsParts.join(' · ') : undefined;
-
-  return { exifDate, exifCamera, exifLens, exifSettings };
-}
-
-async function fetchExifFor(publicId: string) {
-  try {
-    const detail: any = await cloudinary.api.resource(publicId, {
-      image_metadata: true,
-    });
-    return parseExif(detail.image_metadata);
-  } catch {
-    // Missing/unreadable EXIF shouldn't fail the build — the image
-    // just shows without a metadata sidebar in the lightbox.
-    return {};
-  }
+  return undefined;
 }
 
 async function listSubFolders(parent: string): Promise<string[]> {
@@ -201,13 +181,6 @@ async function listImagesInFolder(folderPath: string): Promise<CldImage[]> {
     return 0; // neither pinned → keep query order (newest-first)
   });
 
-  // Fetch EXIF per image (parallel — see fetchExifFor's comment on why
-  // this needs the Admin API rather than a field on the search above).
-  const exifs = await Promise.all(
-    images.map((img) => fetchExifFor(img.public_id))
-  );
-  images.forEach((img, i) => Object.assign(img, exifs[i]));
-
   return images;
 }
 
@@ -245,6 +218,7 @@ async function fetchAlbums(): Promise<Album[]> {
       images,
       newestUploadedAt,
       hidden,
+      location: await findLocation(images),
     });
   }
 

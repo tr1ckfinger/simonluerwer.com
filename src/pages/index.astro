@@ -1,6 +1,8 @@
 ---
 import Base from '../layouts/Base.astro';
 import Lightbox from '../components/Lightbox.astro';
+import SeriesInfo from '../components/SeriesInfo.astro';
+import { getEntry, render } from 'astro:content';
 import { getAlbums, cldUrl, albumHref } from '../lib/cloudinary';
 
 const albums = await getAlbums();
@@ -10,18 +12,16 @@ const albums = await getAlbums();
 // presence (via data-album-href) to tell home-grid thumbs apart from
 // series-page thumbs, which drives whether the dots pagination shows.
 // There's no "go to project" pill in the lightbox, but this href data
-// is still load-bearing for that check. The exif* fields feed the
-// lightbox's per-photo metadata sidebar directly via data attributes
-// (see src/lib/cloudinary.ts for how they're extracted).
+// is still load-bearing for that check. data-project-slug is how the
+// lightbox finds which project's info to show in its left sidebar —
+// only home-grid photos carry it, so opening a photo from inside a
+// project page shows no sidebar (the project page has its own).
 type Item = {
   public_id: string;
   width: number;
   height: number;
   albumHref: string;
-  exifDate?: string;
-  exifCamera?: string;
-  exifLens?: string;
-  exifSettings?: string;
+  projectSlug: string;
 };
 
 const visibleAlbums = albums.filter((a) => !a.hidden);
@@ -30,17 +30,34 @@ const all: Item[] = [];
 for (const album of visibleAlbums) {
   const href = albumHref(album);
   for (const img of album.images) {
+    // The home grid is curated: only photos tagged `home` in Cloudinary
+    // appear here. Everything else lives on /projects ("work") only.
+    if (!img.tags?.includes('home')) continue;
     all.push({
       public_id: img.public_id,
       width: img.width,
       height: img.height,
       albumHref: href,
-      exifDate: img.exifDate,
-      exifCamera: img.exifCamera,
-      exifLens: img.exifLens,
-      exifSettings: img.exifSettings,
+      projectSlug: album.slug,
     });
   }
+}
+
+// Info (Location / Date / Description) for each project that has any
+// photo on the home grid. Rendered below into hidden per-project blocks
+// that the lightbox clones from. Location: markdown override, else the
+// place read from the project's photos.
+const shownSlugs = new Set(all.map((i) => i.projectSlug));
+const seriesInfos = [];
+for (const album of visibleAlbums) {
+  if (!shownSlugs.has(album.slug)) continue;
+  const entry = await getEntry('albums', album.slug);
+  const content = entry ? await render(entry) : null;
+  const hasDescription = !!entry?.body?.trim();
+  const location = entry?.data.location ?? album.location;
+  const date = entry?.data.date;
+  if (!location && !date && !hasDescription) continue;
+  seriesInfos.push({ slug: album.slug, location, date, hasDescription, content });
 }
 
 // Order is randomized client-side so it persists across refreshes within
@@ -84,10 +101,7 @@ const description =
             data-full={cldUrl(img.public_id, { w: 3200, q: 'auto:best' })}
             data-zoom={cldUrl(img.public_id, { q: 'auto:best' })}
             data-album-href={img.albumHref}
-            data-exif-date={img.exifDate}
-            data-exif-camera={img.exifCamera}
-            data-exif-lens={img.exifLens}
-            data-exif-settings={img.exifSettings}
+            data-project-slug={img.projectSlug}
             alt=""
             loading="lazy"
             width={img.width}
@@ -146,10 +160,18 @@ const description =
     })();
   </script>
 
+  {seriesInfos.map((s) => (
+    <div class="series-info-source" data-slug={s.slug} hidden>
+      <SeriesInfo location={s.location} date={s.date} hasDescription={s.hasDescription}>
+        {s.content && <s.content.Content />}
+      </SeriesInfo>
+    </div>
+  ))}
+
   <Lightbox />
 
   {all.length === 0 && (
-    <p class="empty">No photos yet. Upload images to folders in Cloudinary.</p>
+    <p class="empty">Nothing here yet. Tag photos with "home" in Cloudinary to show them on this page.</p>
   )}
 </Base>
 

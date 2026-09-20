@@ -22,7 +22,10 @@ const { album } = Astro.props;
 // neither, and each renders only when present.
 const infoEntry = await getEntry('albums', album.slug);
 const infoContent = infoEntry ? await render(infoEntry) : null;
-const hasMeta = !!(infoEntry?.data.location || infoEntry?.data.date);
+// Location: a `location` in the markdown file wins; otherwise it's the
+// place read from one of the project's photos (see findLocation).
+const location = infoEntry?.data.location ?? album.location;
+const hasMeta = !!(location || infoEntry?.data.date);
 const hasDescription = !!infoEntry?.body?.trim();
 
 // Default back destination is the listing page. The back-arrow script
@@ -33,7 +36,7 @@ const backHref = '/projects';
 
 // SEO: per-series description + the album's own cover as OG image so
 // link previews show the actual series, not a generic fallback.
-const description = `${album.title} — a photo project by Simon Lürwer, photographer based in Hamburg, Germany. ${album.images.length} images.`;
+const description = `${album.title} — a photo series by Simon Lürwer, photographer based in Hamburg, Germany. ${album.images.length} images.`;
 const ogImage = cldUrl(album.cover.public_id, {
   w: 1200,
   h: 630,
@@ -53,7 +56,7 @@ const ogImage = cldUrl(album.cover.public_id, {
     {(hasMeta || hasDescription) && (
       <aside class="album-info">
         <SeriesInfo
-          location={infoEntry?.data.location}
+          location={location}
           date={infoEntry?.data.date}
           hasDescription={hasDescription}
         >
@@ -75,10 +78,6 @@ const ogImage = cldUrl(album.cover.public_id, {
               src={cldUrl(img.public_id, { w: 1600 })}
               data-full={cldUrl(img.public_id, { w: 3200, q: 'auto:best' })}
               data-zoom={cldUrl(img.public_id, { q: 'auto:best' })}
-              data-exif-date={img.exifDate}
-              data-exif-camera={img.exifCamera}
-              data-exif-lens={img.exifLens}
-              data-exif-settings={img.exifSettings}
               alt=""
               loading="lazy"
               width={img.width}

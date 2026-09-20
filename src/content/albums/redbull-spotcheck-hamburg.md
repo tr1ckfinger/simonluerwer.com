@@ -1,6 +1,5 @@
 ---
-location: "Hamburg, Germany"
-date: "2026"
+date: "August 1, 2026"
 ---
 
 Placeholder description — replace with real copy about this shoot:
