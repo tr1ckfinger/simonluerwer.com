@@ -117,8 +117,8 @@ const ogImage = cldUrl(album.cover.public_id, {
     gap: 54px;
   }
   .album-info {
-    /* 420px — 50% wider than the original 280px sidebar. */
-    flex: 0 0 420px;
+    /* 380px (was 420px). */
+    flex: 0 0 380px;
     position: sticky;
     top: calc(var(--nav-h, 70px) + 24px);
     /* Safety net for a long description: never let the sticky sidebar
@@ -169,12 +169,12 @@ const ogImage = cldUrl(album.cover.public_id, {
     padding-top: 8px;
     display: flex;
     flex-wrap: wrap;
-    gap: 54px;
+    gap: 40px;
     --row-h: 312px;
   }
   @media (max-width: 1100px) { .justified { --row-h: 264px; } }
-  @media (max-width: 900px) { .justified { --row-h: 190px; gap: 30px; } }
-  @media (max-width: 500px) { .justified { --row-h: 160px; gap: 18px; } }
+  @media (max-width: 900px) { .justified { --row-h: 190px; gap: 24px; } }
+  @media (max-width: 500px) { .justified { --row-h: 160px; gap: 14px; } }
   .justified figure {
     margin: 0;
     overflow: hidden;
@@ -216,7 +216,7 @@ const ogImage = cldUrl(album.cover.public_id, {
     .justified {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 18px;
+      gap: 14px;
     }
     .justified .filler { display: none; }
     .justified figure {

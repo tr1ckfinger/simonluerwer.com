@@ -89,7 +89,7 @@ const description =
   .card:hover img {
     filter: brightness(var(--img-hover));
   }
-  /* Project name centred on the cover, in Instrument Serif (self-
+  /* Project name in the lower third of the cover, in Instrument Serif (self-
      hosted, see @font-face in Base.astro). A faint dark wash over the
      photo keeps white text legible on bright covers. */
   .card::after {
@@ -101,7 +101,10 @@ const description =
   }
   .title {
     position: absolute;
-    inset: 0;
+    /* Sits in the lower third of the cover, centred within it, then
+       nudged up by 8% of the cover height. */
+    inset: auto 0 8% 0;
+    height: 33.333%;
     z-index: 1;
     display: flex;
     align-items: center;
