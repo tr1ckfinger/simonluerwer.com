@@ -1,8 +1,6 @@
 ---
 ---
 
-i love photos — which is why i take them
-
 The first time i picked up a camera, people were still reading the newspaper on actual paper. I was shooting and reporting on local football matches. Hopelessly out of my depth i had to learn how to operate a camera and gloriously failed the first time - (accidental) motion blur wasn’t respectable back then and the images were in fact also out of focus.
 
 It wasn’t an immediate love affair between me and my dads clunky Nikon or Canon (i can’t even remember). What i enjoyed much more in those days was the writing bit.
