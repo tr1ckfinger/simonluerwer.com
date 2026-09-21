@@ -83,8 +83,8 @@ const { Content } = entry ? await render(entry) : { Content: null };
   .body :global(.prose p) {
     color: var(--fg);
     line-height: 1.6;
-    font-size: 19px;
-    margin: 0 0 28px;
+    font-size: 15px;
+    margin: 0 0 24px;
   }
   .fields {
     display: grid;
@@ -134,7 +134,7 @@ const { Content } = entry ? await render(entry) : { Content: null };
     .portrait { max-width: 300px; margin-inline: auto; }
   }
   @media (max-width: 640px) {
-    .body :global(.prose p) { font-size: 17px; margin-bottom: 24px; }
+    .body :global(.prose p) { font-size: 14px; margin-bottom: 20px; }
     .fields { column-gap: 20px; row-gap: 10px; }
     .fields dt { font-size: 14px; }
     .fields dd { font-size: 15px; }
