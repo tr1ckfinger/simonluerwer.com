@@ -146,15 +146,79 @@ const personSchema = {
             <a href="/projects" class:list={['nav-link', { active: isProjects }]}>work</a>
             <a href="/contact" class:list={['nav-link', { active: isContact }]}>about me</a>
           </nav>
+          <button
+            id="menu-toggle"
+            class="menu-toggle"
+            type="button"
+            aria-label="Open menu"
+            aria-expanded="false"
+            aria-controls="mobile-menu"
+          >
+            <span></span><span></span>
+          </button>
         </div>
       </div>
     </header>
+    <div id="mobile-menu" class="mobile-menu" aria-hidden="true">
+      <nav class="menu-primary" aria-label="Menu">
+        <a href="/projects" style="--i: 0">work</a>
+        <a href="/contact" style="--i: 1">about me</a>
+      </nav>
+      <div class="menu-secondary">
+        <a href="/imprint" style="--i: 2">imprint</a>
+        <a
+          class="menu-ig"
+          href="https://instagram.com/tr1ckfinger"
+          target="_blank"
+          rel="noreferrer"
+          aria-label="Instagram"
+          style="--i: 3"
+        >
+          <svg viewBox="0 0 1000 1000" fill="currentColor" aria-hidden="true"><path d="M295.42,6c-53.2,2.51-89.53,11-121.29,23.48-32.87,12.81-60.73,30-88.45,57.82S40.89,143,28.17,175.92c-12.31,31.83-20.65,68.19-23,121.42S2.3,367.68,2.56,503.46,3.42,656.26,6,709.6c2.54,53.19,11,89.51,23.48,121.28,12.83,32.87,30,60.72,57.83,88.45S143,964.09,176,976.83c31.8,12.29,68.17,20.67,121.39,23s70.35,2.87,206.09,2.61,152.83-.86,206.16-3.39S799.1,988,830.88,975.58c32.87-12.86,60.74-30,88.45-57.84S964.1,862,976.81,829.06c12.32-31.8,20.69-68.17,23-121.35,2.33-53.37,2.88-70.41,2.62-206.17s-.87-152.78-3.4-206.1-11-89.53-23.47-121.32c-12.85-32.87-30-60.7-57.82-88.45S862,40.87,829.07,28.19c-31.82-12.31-68.17-20.7-121.39-23S637.33,2.3,501.54,2.56,348.75,3.4,295.42,6m5.84,903.88c-48.75-2.12-75.22-10.22-92.86-17-23.36-9-40-19.88-57.58-37.29s-28.38-34.11-37.5-57.42c-6.85-17.64-15.1-44.08-17.38-92.83-2.48-52.69-3-68.51-3.29-202s.22-149.29,2.53-202c2.08-48.71,10.23-75.21,17-92.84,9-23.39,19.84-40,37.29-57.57s34.1-28.39,57.43-37.51c17.62-6.88,44.06-15.06,92.79-17.38,52.73-2.5,68.53-3,202-3.29s149.31.21,202.06,2.53c48.71,2.12,75.22,10.19,92.83,17,23.37,9,40,19.81,57.57,37.29s28.4,34.07,37.52,57.45c6.89,17.57,15.07,44,17.37,92.76,2.51,52.73,3.08,68.54,3.32,202s-.23,149.31-2.54,202c-2.13,48.75-10.21,75.23-17,92.89-9,23.35-19.85,40-37.31,57.56s-34.09,28.38-57.43,37.5c-17.6,6.87-44.07,15.07-92.76,17.39-52.73,2.48-68.53,3-202.05,3.29s-149.27-.25-202-2.53m407.6-674.61a60,60,0,1,0,59.88-60.1,60,60,0,0,0-59.88,60.1M245.77,503c.28,141.8,115.44,256.49,257.21,256.22S759.52,643.8,759.25,502,643.79,245.48,502,245.76,245.5,361.22,245.77,503m90.06-.18a166.67,166.67,0,1,1,167,166.34,166.65,166.65,0,0,1-167-166.34" transform="translate(-2.5 -2.5)" /></svg>
+        </a>
+      </div>
+    </div>
     <main>
       <slot />
       <footer class="site-footer">
         <a href="/imprint">Imprint</a>
       </footer>
     </main>
+    <script is:inline>
+      (() => {
+        const toggle = document.getElementById('menu-toggle');
+        const menu = document.getElementById('mobile-menu');
+        if (!toggle || !menu) return;
+        const setOpen = (open) => {
+          document.body.classList.toggle('menu-open', open);
+          toggle.setAttribute('aria-expanded', String(open));
+          toggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+          menu.setAttribute('aria-hidden', String(!open));
+          // iOS Safari with viewport-fit=cover: 100vh can stop short of
+          // the bottom chrome, so size the overlay from the layout
+          // viewport in pixels (same trick as the lightbox).
+          if (open) {
+            menu.style.height =
+              Math.max(document.documentElement.clientHeight, window.innerHeight) + 'px';
+          }
+        };
+        toggle.addEventListener('click', () =>
+          setOpen(!document.body.classList.contains('menu-open'))
+        );
+        menu.querySelectorAll('a').forEach((a) =>
+          a.addEventListener('click', () => setOpen(false))
+        );
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') setOpen(false);
+        });
+        // Rotating/resizing past the mobile breakpoint: reset cleanly.
+        matchMedia('(min-width: 641px)').addEventListener('change', (e) => {
+          if (e.matches) setOpen(false);
+        });
+        // Back/forward cache can restore the page with the menu open.
+        window.addEventListener('pageshow', () => setOpen(false));
+      })();
+    </script>
     {albumHeader && (
       <script is:inline>
         // Project back-arrow: send the user back to whichever listing
@@ -476,17 +540,23 @@ const personSchema = {
            max-width — the grid expands to fill the viewport so the
            images themselves get bigger, not the count per row. */
         padding: 0 80px 80px;
+        /* Always taller than the viewport, so the imprint link (pinned
+           to main's bottom edge below) is below the fold on every page
+           — even short ones like about-me — and never visible without
+           scrolling. The extra 32px covers the nav sitting above main,
+           which pushes main's bottom further down still. */
+        position: relative;
+        min-height: calc(100vh + 32px);
       }
       .site-footer {
-        /* Sits after whatever the page renders (image grid, contact
-           prose, etc.) — genuinely "at the bottom", after everything
-           else has loaded, since it's just the next element in normal
-           document flow. Deliberately understated: a single small
-           link, not a full footer block, so it doesn't compete with
-           the photography. */
-        margin-top: 64px;
-        padding-top: 24px;
-        border-top: 1px solid var(--btn-bg);
+        /* Absolutely pinned to the bottom of main's padding area, at
+           main's own left inset, so it sits at the very end of the page
+           whether the content is short or long (the 80px bottom padding
+           reserves its room, so it never overlaps content). Deliberately
+           understated: one small link, no divider. */
+        position: absolute;
+        left: 80px;
+        bottom: 28px;
       }
       .site-footer a {
         color: var(--muted);
@@ -496,6 +566,158 @@ const personSchema = {
       .site-footer a:hover {
         color: var(--fg);
       }
+      /* ---- Mobile menu (burger + full-screen overlay) ----
+         Only exists at <=640px; hidden entirely on desktop. */
+      .menu-toggle,
+      .mobile-menu {
+        display: none;
+      }
+      .menu-toggle {
+        position: relative;
+        width: 44px;
+        height: 36px;
+        /* Negative margins: keeps the 44x36 hit target without making
+           the nav row any taller, and lets the icon's right edge line
+           up with the page margin. */
+        margin: -8px -12px -8px 0;
+        padding: 0;
+        border: none;
+        background: transparent;
+        color: var(--fg);
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .menu-toggle span {
+        position: absolute;
+        left: 12px;
+        right: 12px;
+        top: calc(50% - 1px);
+        height: 2px;
+        background: currentColor;
+        transition: transform 560ms cubic-bezier(0.65, 0, 0.35, 1);
+      }
+      .menu-toggle span:nth-child(1) { transform: translateY(-4px); }
+      .menu-toggle span:nth-child(2) { transform: translateY(4px); }
+      body.menu-open .menu-toggle span:nth-child(1) { transform: rotate(45deg); }
+      body.menu-open .menu-toggle span:nth-child(2) { transform: rotate(-45deg); }
+      body.menu-open { overflow: hidden; }
+      /* While open, the header rises above the overlay (so the brand
+         and the burger-turned-X stay visible and tappable) and drops
+         its own background/blur so it blends into the overlay. */
+      body.menu-open .nav {
+        z-index: 95;
+        background: transparent;
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+      }
+      /* The reveal is a radial mask with a wide FEATHERED edge (not a
+         hard clip-path circle), growing from the burger while the
+         whole overlay also fades in — so it reads as a soft wash of
+         colour spreading across the screen rather than a geometric
+         disc. --menu-r is a registered length so it can be animated. */
+      @property --menu-r {
+        syntax: '<length>';
+        inherits: false;
+        initial-value: 0px;
+      }
+      .mobile-menu {
+        --menu-r: 0px;
+        --menu-origin: calc(100% - 26px) calc(env(safe-area-inset-top) + 27px);
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100vh; /* refined in JS from clientHeight — see script */
+        z-index: 90;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: calc(var(--nav-h, 64px) + 40px) 16px max(32px, calc(env(safe-area-inset-bottom) + 24px));
+        background: var(--bg);
+        overflow-y: auto;
+        visibility: hidden;
+        opacity: 0;
+        -webkit-mask-image: radial-gradient(circle at var(--menu-origin), #000 calc(var(--menu-r) - 240px), transparent var(--menu-r));
+        mask-image: radial-gradient(circle at var(--menu-origin), #000 calc(var(--menu-r) - 240px), transparent var(--menu-r));
+        transition:
+          --menu-r 900ms cubic-bezier(0.65, 0, 0.35, 1),
+          opacity 700ms ease,
+          visibility 0s linear 900ms;
+      }
+      body.menu-open .mobile-menu {
+        --menu-r: 220vmax;
+        visibility: visible;
+        opacity: 1;
+        transition:
+          --menu-r 900ms cubic-bezier(0.65, 0, 0.35, 1),
+          opacity 700ms ease,
+          visibility 0s;
+      }
+      .mobile-menu a {
+        display: block;
+        color: var(--fg);
+        opacity: 0;
+        transform: translateY(16px);
+        transition: opacity 250ms ease, transform 250ms ease;
+      }
+      body.menu-open .mobile-menu a {
+        opacity: 1;
+        transform: none;
+        /* Links rise in one after another once the wash is well
+           underway. Closing has no delay (see the base rule). */
+        transition:
+          opacity 600ms ease calc(520ms + var(--i, 0) * 90ms),
+          transform 700ms cubic-bezier(0.2, 0.8, 0.2, 1) calc(520ms + var(--i, 0) * 90ms);
+      }
+      .menu-primary a {
+        font-size: 40px;
+        font-weight: 600;
+        letter-spacing: -0.03em;
+        line-height: 1.25;
+        padding: 6px 0;
+      }
+      /* Bottom row: Instagram glyph bottom-left, Imprint bottom-right
+         (DOM order is imprint first, so the glyph is reordered). */
+      .menu-secondary {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .menu-secondary a {
+        font-size: 16px;
+        color: var(--muted);
+        padding: 8px 0;
+      }
+      /* Instagram glyph: fills with the foreground colour (near-black
+         in light mode; flips to light in dark mode so it stays visible). */
+      .menu-secondary a.menu-ig {
+        order: -1;
+        color: var(--fg);
+        width: 22px;
+        padding: 8px 0;
+        box-sizing: content-box;
+      }
+      .menu-ig svg {
+        display: block;
+        width: 22px;
+        height: 22px;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .mobile-menu,
+        body.menu-open .mobile-menu {
+          --menu-r: 220vmax;
+          transition: opacity 200ms ease, visibility 0s linear 200ms;
+        }
+        body.menu-open .mobile-menu {
+          transition: opacity 200ms ease, visibility 0s;
+        }
+        .mobile-menu a,
+        body.menu-open .mobile-menu a {
+          opacity: 1;
+          transform: none;
+          transition: none;
+        }
+        .menu-toggle span { transition: none; }
+      }
       @media (max-width: 1100px) {
         /* Tighten the side rails as the viewport narrows so 80px
            doesn't eat too much of a smaller screen. */
@@ -503,6 +725,7 @@ const personSchema = {
           padding: calc(20px + env(safe-area-inset-top)) calc(40px + env(safe-area-inset-right)) 20px calc(40px + env(safe-area-inset-left));
         }
         main { padding: 0 40px 80px; }
+        .site-footer { left: 40px; }
       }
       @media (max-width: 640px) {
         /* Let the right column size to its content so the links and
@@ -518,13 +741,17 @@ const personSchema = {
           grid-template-columns: minmax(0, 1fr) auto auto;
         }
         main { padding: 0 16px 48px; }
+        .site-footer { left: 16px; bottom: 16px; }
         .nav-left { gap: 12px; }
         .back-arrow {
           position: static;
           transform: none;
         }
         .nav-right { gap: 14px; }
-        .nav-links { gap: 12px; font-size: 14px; }
+        /* Nav links give way to the burger + full-screen menu. */
+        .nav-links { display: none; }
+        .menu-toggle { display: block; }
+        .mobile-menu { display: flex; }
         /* Album count hides on narrow screens so the nav links and
            album title both have room to breathe. */
         .nav-center { display: none; }

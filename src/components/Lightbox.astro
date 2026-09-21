@@ -696,12 +696,11 @@
     updateInfo(thumb);
     syncInfoGap();
     // Sidebar fades in over the same window as the grid fades out.
-    if (
+    const infoShown =
       lbInfo.classList.contains('visible') &&
-      getComputedStyle(lbInfo).display !== 'none'
-    ) {
-      fadeInfo('in', OPEN_DURATION, OPEN_EASING);
-    }
+      getComputedStyle(lbInfo).display !== 'none';
+    openMs = infoShown ? OPEN_DURATION_INFO : OPEN_DURATION;
+    if (infoShown) fadeInfo('in', openMs, OPEN_EASING);
 
     // Pin lbImg to its final fit dimensions in pixels BEFORE we measure
     // the FLIP "to" rect. Without this the <img> sizes itself to its
@@ -767,7 +766,7 @@
       // opacity:0 in place so they stay hidden until close re-fades
       // them back in — otherwise they'd pop back visible the instant
       // fill:'forwards' is released.
-      fadePage(fadeTargets, 'out', OPEN_DURATION, OPEN_EASING);
+      fadePage(fadeTargets, 'out', openMs, OPEN_EASING);
 
       if (flipArgs) runOpenFlip(flipArgs.dx, flipArgs.dy, flipArgs.s);
       else runFlip(from, 'open');
@@ -787,6 +786,12 @@
   const OPEN_DURATION = 320;
   const OPEN_EASING = 'cubic-bezier(0.45, 0, 0.15, 1)';
   const CLOSE_DURATION = 220;
+  // When the info sidebar is showing there's more on screen to
+  // coordinate (column fade + image flight), so both run a touch slower.
+  const OPEN_DURATION_INFO = 420;
+  const CLOSE_DURATION_INFO = 300;
+  let openMs = OPEN_DURATION;
+  let closeMs = CLOSE_DURATION;
   const CLOSE_EASING = 'cubic-bezier(0.45, 0, 0.15, 1)';
 
   // Dedicated open FLIP. fill:'forwards' holds identity after finish
@@ -797,7 +802,7 @@
     const fromKF = { transform: `translate(${dx}px, ${dy}px) scale(${s})` };
     const toKF = { transform: 'translate(0, 0) scale(1)' };
     const anim = lbImg.animate([fromKF, toKF], {
-      duration: OPEN_DURATION,
+      duration: openMs,
       easing: OPEN_EASING,
       fill: 'forwards',
     });
@@ -973,7 +978,7 @@
     return lbImg.animate(
       opening ? [fromKF, toKF] : [toKF, fromKF],
       {
-        duration: opening ? OPEN_DURATION : CLOSE_DURATION,
+        duration: opening ? openMs : closeMs,
         easing: opening ? OPEN_EASING : CLOSE_EASING,
       }
     );
@@ -1024,11 +1029,15 @@
     // grid fading back in (transparent while it fades, so the returning
     // image never passes under a solid panel). It's removed for real in
     // doClose once the image has landed.
+    const infoShownOnClose =
+      lbInfo.classList.contains('visible') &&
+      getComputedStyle(lbInfo).display !== 'none';
+    closeMs = infoShownOnClose ? CLOSE_DURATION_INFO : CLOSE_DURATION;
     if (lbInfo.classList.contains('visible')) {
       lbInfo.classList.remove('solid');
       fadeInfo(
         'out',
-        opts?.dragDy !== undefined ? 260 : CLOSE_DURATION,
+        opts?.dragDy !== undefined ? 260 : closeMs,
         opts?.dragDy !== undefined
           ? 'cubic-bezier(0.4, 0, 1, 1)'
           : CLOSE_EASING
@@ -1097,9 +1106,9 @@
       // and the image out together. doClose runs once both finish.
       const imgAnim = lbImg.animate(
         [{ opacity: 1 }, { opacity: 0 }],
-        { duration: CLOSE_DURATION, easing: CLOSE_EASING, fill: 'forwards' }
+        { duration: closeMs, easing: CLOSE_EASING, fill: 'forwards' }
       );
-      fadePage(fadeTargets, 'in', CLOSE_DURATION, CLOSE_EASING);
+      fadePage(fadeTargets, 'in', closeMs, CLOSE_EASING);
       const finish = () => {
         imgAnim.cancel();
         doClose();
@@ -1115,7 +1124,7 @@
       // image to its thumb position. The thumb itself is in <main>,
       // so by the time the FLIP lands, the thumb is fully opaque
       // again underneath.
-      fadePage(fadeTargets, 'in', CLOSE_DURATION, CLOSE_EASING);
+      fadePage(fadeTargets, 'in', closeMs, CLOSE_EASING);
       if (imgAnim) {
         const finish = () => doClose();
         imgAnim.finished.then(finish, finish);
@@ -1123,7 +1132,7 @@
         // No FLIP fired (lbImg had zero size). Defer doClose by the
         // close duration so the page-chrome fade still has time to
         // play out before we tear down.
-        setTimeout(doClose, CLOSE_DURATION);
+        setTimeout(doClose, closeMs);
       }
     });
   }
