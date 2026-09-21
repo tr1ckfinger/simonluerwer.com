@@ -43,9 +43,6 @@ export type Album = {
   // The series page also emits noindex so Google doesn't pick it up
   // even if the URL is discovered.
   hidden: boolean;
-  // Place name read from one of the photos' own metadata (see
-  // findLocation). A `location` in the project's markdown file overrides it.
-  location?: string;
 };
 
 // This is the curated professional site — it deliberately reads from
@@ -69,48 +66,6 @@ function titleFromFolder(folder: string) {
 // folder "street-life" stays "street-life".
 function slugFromFolder(folder: string) {
   return folder.trim().toLowerCase().replace(/\s+/g, '-');
-}
-
-// Location comes from the photos themselves: Lightroom/Capture One
-// write a hierarchical keyword like "03. PLACES|Europe|Hamburg|Rotherbaum"
-// into the file's XMP. Cloudinary's Search API does NOT return
-// image_metadata (it comes back as {}) — only the Admin API's per-asset
-// resource() call does — so this costs one request per probed image.
-// We only probe until we find a place (usually the first image), not
-// every photo.
-function locationFromMetadata(m: Record<string, string> | undefined) {
-  if (!m) return undefined;
-  const hier = m.HierarchicalSubject;
-  if (hier) {
-    // Entries are comma-joined; keep the deepest PLACES path.
-    const places = hier
-      .split(/,\s*/)
-      .filter((e) => /PLACES\|/i.test(e))
-      .sort((a, b) => b.split('|').length - a.split('|').length)[0];
-    if (places) {
-      // [category, continent, city, district?] → "District, City"
-      const parts = places.split('|').slice(2).filter(Boolean);
-      if (parts.length) return parts.reverse().join(', ');
-    }
-  }
-  // Plain IPTC fields, for files tagged by other tools.
-  const iptc = [m.Sublocation, m.City, m.Country].filter(Boolean);
-  return iptc.length ? iptc.join(', ') : undefined;
-}
-
-async function findLocation(images: CldImage[]): Promise<string | undefined> {
-  for (const img of images.slice(0, 5)) {
-    try {
-      const detail: any = await cloudinary.api.resource(img.public_id, {
-        image_metadata: true,
-      });
-      const loc = locationFromMetadata(detail.image_metadata);
-      if (loc) return loc;
-    } catch {
-      // Unreadable metadata shouldn't fail the build — try the next image.
-    }
-  }
-  return undefined;
 }
 
 async function listSubFolders(parent: string): Promise<string[]> {
@@ -218,7 +173,6 @@ async function fetchAlbums(): Promise<Album[]> {
       images,
       newestUploadedAt,
       hidden,
-      location: await findLocation(images),
     });
   }
 

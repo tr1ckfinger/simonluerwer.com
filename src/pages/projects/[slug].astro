@@ -22,9 +22,8 @@ const { album } = Astro.props;
 // neither, and each renders only when present.
 const infoEntry = await getEntry('albums', album.slug);
 const infoContent = infoEntry ? await render(infoEntry) : null;
-// Location: a `location` in the markdown file wins; otherwise it's the
-// place read from one of the project's photos (see findLocation).
-const location = infoEntry?.data.location ?? album.location;
+// Location is written by hand in the markdown file's frontmatter.
+const location = infoEntry?.data.location;
 const hasMeta = !!(location || infoEntry?.data.date);
 const hasDescription = !!infoEntry?.body?.trim();
 

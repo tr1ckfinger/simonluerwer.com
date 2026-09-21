@@ -54,7 +54,7 @@ for (const album of visibleAlbums) {
   const entry = await getEntry('albums', album.slug);
   const content = entry ? await render(entry) : null;
   const hasDescription = !!entry?.body?.trim();
-  const location = entry?.data.location ?? album.location;
+  const location = entry?.data.location;
   const date = entry?.data.date;
   if (!location && !date && !hasDescription) continue;
   seriesInfos.push({ slug: album.slug, location, date, hasDescription, content });

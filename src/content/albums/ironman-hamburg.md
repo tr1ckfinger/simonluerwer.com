@@ -1,5 +1,6 @@
 ---
-date: "August 16, 2026"
+date: "June 7, 2026"
+# location: "Hamburg, Germany"   (add by hand; row is hidden until set)
 ---
 
 Placeholder description — replace with real copy about this project: what the event was, who was involved, what you were going for.
