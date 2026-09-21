@@ -1,6 +1,6 @@
 ---
 date: "August 1, 2026"
-# location: "Hamburg, Germany"   (add by hand; row is hidden until set)
+location: "Hamburg, Germany"
 ---
 
 Placeholder description — replace with real copy about this shoot:

@@ -127,6 +127,16 @@ const ogImage = cldUrl(album.cover.public_id, {
     max-height: calc(100vh - var(--nav-h, 70px) - 48px);
     overflow-y: auto;
     padding-top: 8px;
+    /* Fades in on arrival (same feel as the lightbox sidebar on the
+       home grid) instead of appearing instantly before the images. */
+    animation: info-in 800ms cubic-bezier(0.22, 1, 0.36, 1) 200ms both;
+  }
+  @keyframes info-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .album-info { animation: none; }
   }
   .justified {
     /* Sole flex child when there's no info sidebar — flex-basis: 0 +

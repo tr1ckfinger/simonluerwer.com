@@ -449,6 +449,17 @@ const personSchema = {
            the best pure-CSS match we've found. */
         transition: background-color 300ms ease-in-out, color 300ms ease-in-out;
       }
+      /* Cross-document view transition: page-to-page navigations
+         crossfade instead of cutting through a white frame. Browsers
+         without support just navigate as before. */
+      @view-transition {
+        navigation: auto;
+      }
+      ::view-transition-old(root),
+      ::view-transition-new(root) {
+        animation-duration: 350ms;
+        animation-timing-function: ease-in-out;
+      }
       @keyframes drop-in {
         0% {
           opacity: 0;
