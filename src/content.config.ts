@@ -27,4 +27,13 @@ const albums = defineCollection({
 // render(entry) in the page template, no separate frontmatter key
 // needed for it.
 
-export const collections = { albums };
+// The About-me page copy: a single Markdown file,
+// src/content/about/about.md. Body only — paragraphs separated by a
+// blank line. The email / instagram / location rows stay in
+// contact.astro since they're structured, not prose.
+const about = defineCollection({
+  loader: glob({ pattern: '**/*.md', base: './src/content/about' }),
+  schema: z.object({}),
+});
+
+export const collections = { albums, about };

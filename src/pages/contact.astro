@@ -1,5 +1,10 @@
 ---
 import Base from '../layouts/Base.astro';
+import { getEntry, render } from 'astro:content';
+
+// Prose lives in src/content/about/about.md.
+const entry = await getEntry('about', 'about');
+const { Content } = entry ? await render(entry) : { Content: null };
 ---
 
 <Base
@@ -16,7 +21,7 @@ import Base from '../layouts/Base.astro';
       height="1600"
     />
     <div class="body">
-      <p>i love photos — which is why i take them</p>
+      <div class="prose">{Content && <Content />}</div>
       <dl class="fields">
         <dt>email</dt>
         <dd><a id="email-link" href="#" rel="noreferrer">simon [at] imgs.wtf</a></dd>
@@ -62,7 +67,7 @@ import Base from '../layouts/Base.astro';
     justify-content: center;
     align-content: center;
     min-height: calc(100vh - var(--nav-h, 56px) - 48px);
-    padding: 0;
+    padding: 24px 0;
   }
   .portrait {
     display: block;
@@ -75,7 +80,7 @@ import Base from '../layouts/Base.astro';
   .body {
     max-width: 560px;
   }
-  .body p {
+  .body :global(.prose p) {
     color: var(--fg);
     line-height: 1.6;
     font-size: 19px;
@@ -129,7 +134,7 @@ import Base from '../layouts/Base.astro';
     .portrait { max-width: 300px; }
   }
   @media (max-width: 640px) {
-    .body p { font-size: 17px; margin-bottom: 24px; }
+    .body :global(.prose p) { font-size: 17px; margin-bottom: 24px; }
     .fields { column-gap: 20px; row-gap: 10px; }
     .fields dt { font-size: 14px; }
     .fields dd { font-size: 15px; }
