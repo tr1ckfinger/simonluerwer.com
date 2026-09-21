@@ -89,18 +89,37 @@ const description =
   .card:hover img {
     filter: brightness(var(--img-hover));
   }
-  .title {
-    /* Title sits over the bottom-left corner of the cover, with a
-       soft shadow so it reads against either light or dark covers
-       without needing a gradient overlay. */
+  /* Project name centred on the cover, in Instrument Serif (self-
+     hosted, see @font-face in Base.astro). A faint dark wash over the
+     photo keeps white text legible on bright covers. */
+  .card::after {
+    content: '';
     position: absolute;
-    left: 14px;
-    bottom: 12px;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.22);
+    pointer-events: none;
+  }
+  .title {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 18px;
+    text-align: center;
+    text-wrap: balance;
     color: #fff;
-    font-size: 15px;
-    font-weight: 500;
+    font-family: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+    font-weight: 400;
+    font-size: clamp(20px, 2vw, 31px);
+    line-height: 1.05;
     letter-spacing: -0.01em;
     text-shadow: 0 1px 18px rgba(0, 0, 0, 0.35);
+    pointer-events: none;
+  }
+  @media (max-width: 760px) {
+    .title { font-size: 18px; padding: 0 12px; }
   }
   .empty {
     color: var(--muted);
