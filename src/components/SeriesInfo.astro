@@ -59,13 +59,13 @@ const hasMeta = !!(location || date);
   }
   .meta dt {
     color: var(--fg);
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 500;
     margin: 0 0 4px;
   }
   .meta dd {
     margin: 0 0 20px;
-    font-size: 16px;
+    font-size: 14px;
     color: var(--muted);
   }
   .meta dd:last-child {
@@ -74,7 +74,7 @@ const hasMeta = !!(location || date);
   .description-label {
     display: block;
     color: var(--fg);
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 500;
     margin: 0 0 4px;
   }
@@ -84,15 +84,12 @@ const hasMeta = !!(location || date);
   .description {
     color: var(--muted);
     line-height: 1.65;
-    font-size: 16px;
+    font-size: 14px;
   }
   .description :global(p) {
     margin: 0 0 16px;
   }
   .description :global(p:last-child) {
     margin-bottom: 0;
-  }
-  @media (max-width: 640px) {
-    .meta dt, .meta dd, .description-label, .description { font-size: 15px; }
   }
 </style>

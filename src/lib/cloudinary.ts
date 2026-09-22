@@ -84,15 +84,16 @@ async function listSubFolders(parent: string): Promise<string[]> {
 async function listImagesInFolder(folderPath: string): Promise<CldImage[]> {
   // Quote the folder path so any spaces in folder names are parsed as
   // part of the path segment instead of splitting the search expression.
-  // Sort newest-first by upload time: photos within a series appear
-  // with the most recent shoot at the top, and as new images are added
-  // to a folder they show up first on the page instead of getting
-  // buried at the bottom.
+  // Sort oldest-first by upload time: within a series, that reads as
+  // the shoot unfolding in the order it happened. This only matters
+  // for images that DON'T carry a manual `order` context field — those
+  // are explicitly pinned below and this base order is just their
+  // (stable) fallback relative position.
   const res: any = await cloudinary.search
     .expression(`folder:"${folderPath}/*"`)
     .with_field('tags')
     .with_field('context')
-    .sort_by('uploaded_at', 'desc')
+    .sort_by('uploaded_at', 'asc')
     .max_results(500)
     .execute();
 
@@ -124,7 +125,7 @@ async function listImagesInFolder(folderPath: string): Promise<CldImage[]> {
 
   // Stable sort: images with an `order` value come first in ascending
   // order; images without one keep their current relative position,
-  // which is uploaded_at desc (newest-first) from the Cloudinary query.
+  // which is uploaded_at asc (oldest-first) from the Cloudinary query.
   // Array.prototype.sort is stable in modern V8, so equal-key items
   // (both unordered, or same order value) preserve the query order.
   images.sort((a, b) => {
@@ -133,7 +134,7 @@ async function listImagesInFolder(folderPath: string): Promise<CldImage[]> {
     if (ao !== undefined && bo !== undefined) return ao - bo;
     if (ao !== undefined) return -1; // a is pinned, b isn't → a first
     if (bo !== undefined) return 1; // b is pinned, a isn't → b first
-    return 0; // neither pinned → keep query order (newest-first)
+    return 0; // neither pinned → keep query order (oldest-first)
   });
 
   return images;
