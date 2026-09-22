@@ -207,6 +207,7 @@ const personSchema = {
         </div>
       </footer>
     </main>
+    <div id="page-fade" aria-hidden="true"></div>
     <script is:inline>
       // JS-assembled mailto, same idea (and same placeholder address) as
       // the About page — TODO: swap to hello@luerwer.com together with
@@ -237,18 +238,7 @@ const personSchema = {
         toggle.addEventListener('click', () =>
           setOpen(!document.body.classList.contains('menu-open'))
         );
-        // Same-tab links (home / work / about me / imprint) are
-        // deliberately left to close on their own: the click fires the
-        // page-to-page transition below almost immediately, and that
-        // transition captures this page exactly as it looks right now
-        // (menu open) and dissolves that whole snapshot away to reveal
-        // the destination page. If we closed the menu with setOpen(false)
-        // first, the departing snapshot would just be the bare page
-        // underneath, which reads as "the old page shows, then swaps"
-        // instead of "the menu dissolves into the new page".
-        // The Instagram link is the one exception — it opens in a new
-        // tab, so this tab never navigates and needs an explicit close.
-        menu.querySelectorAll('a[target="_blank"]').forEach((a) =>
+        menu.querySelectorAll('a').forEach((a) =>
           a.addEventListener('click', () => setOpen(false))
         );
         document.addEventListener('keydown', (e) => {
@@ -260,6 +250,52 @@ const personSchema = {
         });
         // Back/forward cache can restore the page with the menu open.
         window.addEventListener('pageshow', () => setOpen(false));
+      })();
+    </script>
+    <script is:inline>
+      // Page-fade: fades #page-fade to opaque, then navigates for real —
+      // see the comment on #page-fade in the global styles for why this
+      // replaced a native view-transition. Applies to any plain,
+      // same-tab, same-origin link click site-wide (nav, mobile menu,
+      // work covers, footer, …), so every internal navigation gets the
+      // same treatment.
+      (() => {
+        const fade = document.getElementById('page-fade');
+        if (!fade) return;
+        const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const FADE_MS = reduceMotion ? 0 : 260;
+        document.addEventListener('click', (e) => {
+          if (e.defaultPrevented || e.button !== 0) return;
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+          const link = e.target.closest('a[href]');
+          if (!link) return;
+          // The back-arrow prefers history.back() (own handler above);
+          // new-tab and download links should behave normally.
+          if (link.closest('.back-arrow')) return;
+          if (link.target === '_blank' || link.hasAttribute('download')) return;
+          let url;
+          try {
+            url = new URL(link.href, location.href);
+          } catch {
+            return;
+          }
+          if (url.origin !== location.origin) return;
+          // A same-page hash link has nothing to navigate to.
+          if (
+            url.pathname === location.pathname &&
+            url.search === location.search &&
+            url.hash
+          ) {
+            return;
+          }
+          e.preventDefault();
+          fade.classList.add('active');
+          const go = () => {
+            window.location.href = link.href;
+          };
+          if (FADE_MS === 0) go();
+          else setTimeout(go, FADE_MS);
+        });
       })();
     </script>
     {albumHeader && (
@@ -460,45 +496,33 @@ const personSchema = {
            the best pure-CSS match we've found. */
         transition: background-color 300ms ease-in-out, color 300ms ease-in-out;
       }
-      /* Cross-document view transition: page-to-page navigations
-         dissolve through a white frame. Browsers without support just
-         navigate as before.
-         The destination page is placed UNDERNEATH the departing one
-         (z-index) and stays fully opaque throughout (no fade-in) —
-         only the old page fades out on top of it. This is what makes
-         leaving the mobile menu look right: the old snapshot captures
-         whatever the departing page looked like at the moment of the
-         click (menu open, mid-wash), and that whole snapshot simply
-         dissolves to reveal the new page, which is already sitting
-         there rendered — rather than a symmetric crossfade, which
-         would show the bare old page (menu already gone) for a beat
-         before blending into the new one. */
-      @view-transition {
-        navigation: auto;
+      /* Page-fade overlay: we tried the browser's native cross-document
+         view-transition for this, twice, and both attempts produced
+         real rendering bugs on WebKit (a stale-page flash, then
+         magenta streaking) once the mobile menu's masked overlay and
+         the grid's own entrance animations got involved — the native
+         feature captures whole-page screenshots and composites them in
+         ways we don't fully control. This does the same job with a
+         plain, fully-owned opacity transition instead: fade this page
+         to the background colour, then navigate for real. The
+         destination page loads fresh and plays its own entrance
+         animations (drop-in tiles, image fade-in) exactly as it always
+         has — nothing to fight with. See the click-handling script
+         further down for the other half of this. */
+      #page-fade {
+        position: fixed;
+        inset: 0;
+        z-index: 500;
+        background: var(--bg);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 260ms ease;
       }
-      /* The browser's default mix-blend-mode: plus-lighter on these two
-         pseudo-elements additively blends old-over-new so a symmetric
-         crossfade doesn't muddy overlapping content. Our transition
-         isn't symmetric (only the old page animates), and that additive
-         blend is what caused the magenta/purple streaking on real
-         WebKit — normal alpha compositing removes it. */
-      ::view-transition-old(root),
-      ::view-transition-new(root) {
-        mix-blend-mode: normal;
-      }
-      ::view-transition-old(root) {
-        z-index: 2;
-        animation: root-fade-out 420ms ease both;
-      }
-      ::view-transition-new(root) {
-        z-index: 1;
-        animation: none;
-      }
-      @keyframes root-fade-out {
-        to { opacity: 0; }
+      #page-fade.active {
+        opacity: 1;
       }
       @media (prefers-reduced-motion: reduce) {
-        ::view-transition-old(root) { animation-duration: 1ms; }
+        #page-fade { transition: none; }
       }
       @keyframes drop-in {
         0% {
