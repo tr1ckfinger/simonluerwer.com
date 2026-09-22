@@ -476,6 +476,16 @@ const personSchema = {
       @view-transition {
         navigation: auto;
       }
+      /* The browser's default mix-blend-mode: plus-lighter on these two
+         pseudo-elements additively blends old-over-new so a symmetric
+         crossfade doesn't muddy overlapping content. Our transition
+         isn't symmetric (only the old page animates), and that additive
+         blend is what caused the magenta/purple streaking on real
+         WebKit — normal alpha compositing removes it. */
+      ::view-transition-old(root),
+      ::view-transition-new(root) {
+        mix-blend-mode: normal;
+      }
       ::view-transition-old(root) {
         z-index: 2;
         animation: root-fade-out 420ms ease both;
