@@ -132,8 +132,50 @@ const personSchema = {
       type="application/ld+json"
       set:html={JSON.stringify(personSchema)}
     />
+    <!-- Arrived here via one of our own links (see the page-fade click
+         handler near the end of <body>)? Mark <html> before anything
+         below paints, so #page-fade — the very first element in
+         <body> — is already opaque on its first frame. Without this,
+         there'd be a gap between the departing page's cover and this
+         page's own reveal where the browser could paint a bare frame
+         of this page underneath. Deliberately not is:inline-optimised
+         away: this must run synchronously, before body parsing, or it
+         does nothing. -->
+    <script is:inline>
+      try {
+        if (sessionStorage.getItem('pfArm') === '1') {
+          document.documentElement.classList.add('pf-armed');
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
+    <div id="page-fade" aria-hidden="true"></div>
+    <script is:inline>
+      // Second half of the entry side: reveal the cover (see the
+      // pf-armed script in <head> and the exit click handler further
+      // down). Runs as early in <body> as possible, right after the
+      // element it targets.
+      (() => {
+        if (!document.documentElement.classList.contains('pf-armed')) return;
+        try {
+          sessionStorage.removeItem('pfArm');
+        } catch (e) {}
+        const fade = document.getElementById('page-fade');
+        if (!fade) return;
+        // A short delay, not requestAnimationFrame: rAF fully pauses
+        // while a tab is backgrounded, which would leave the page
+        // stuck under a full-white cover if focus ever moved away at
+        // exactly the wrong moment. setTimeout still fires either way,
+        // and the delay is plenty for the browser to have painted the
+        // pf-armed (fully opaque) state at least once before we start
+        // transitioning away from it.
+        setTimeout(() => {
+          document.documentElement.classList.remove('pf-armed');
+          fade.classList.add('reveal');
+        }, 40);
+      })();
+    </script>
     <header class="nav">
       <div class="nav-inner">
         <div class="nav-left">
@@ -207,7 +249,6 @@ const personSchema = {
         </div>
       </footer>
     </main>
-    <div id="page-fade" aria-hidden="true"></div>
     <script is:inline>
       // JS-assembled mailto, same idea (and same placeholder address) as
       // the About page — TODO: swap to hello@luerwer.com together with
@@ -253,17 +294,31 @@ const personSchema = {
       })();
     </script>
     <script is:inline>
-      // Page-fade: fades #page-fade to opaque, then navigates for real —
-      // see the comment on #page-fade in the global styles for why this
-      // replaced a native view-transition. Applies to any plain,
-      // same-tab, same-origin link click site-wide (nav, mobile menu,
-      // work covers, footer, …), so every internal navigation gets the
-      // same treatment.
+      // Page-fade, exit side (see the pf-armed script in <head> and the
+      // reveal script at the top of <body> for the entry side). Applies
+      // to any plain, same-tab, same-origin link click site-wide (nav,
+      // mobile menu, work covers, footer, …).
+      //
+      // Covers the page INSTANTLY (no transition) rather than fading it
+      // out — we tried an animated fade-out here first, and on real
+      // devices there was no way to guarantee the cover had actually
+      // reached full opacity before navigation began, so the old page
+      // (menu included) could still flash through for a frame. An
+      // instant cover has no such race: by the time we navigate, it's
+      // already fully opaque, guaranteed. Sets a sessionStorage flag so
+      // the destination page knows to start covered too (see <head>),
+      // and lets that page's own script fade the cover away once it's
+      // ready — that's where the visible "smoothness" actually lives.
       (() => {
         const fade = document.getElementById('page-fade');
         if (!fade) return;
-        const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-        const FADE_MS = reduceMotion ? 0 : 260;
+        // A bfcache-restored page can carry the classes from the moment
+        // it was left (mid-cover, or already revealed) — clear both so
+        // this page instance starts clean for whatever the user does
+        // next, either right now or on a future visit.
+        window.addEventListener('pageshow', () => {
+          fade.classList.remove('active', 'reveal');
+        });
         document.addEventListener('click', (e) => {
           if (e.defaultPrevented || e.button !== 0) return;
           if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
@@ -289,12 +344,19 @@ const personSchema = {
             return;
           }
           e.preventDefault();
+          try {
+            sessionStorage.setItem('pfArm', '1');
+          } catch (err) {}
           fade.classList.add('active');
-          const go = () => {
+          // A short delay, not requestAnimationFrame: rAF fully pauses
+          // if the tab is ever backgrounded, which here would mean the
+          // tap silently does nothing instead of navigating. setTimeout
+          // still fires either way, and 40ms is plenty for the browser
+          // to have actually painted the cover before we tear this
+          // page down.
+          setTimeout(() => {
             window.location.href = link.href;
-          };
-          if (FADE_MS === 0) go();
-          else setTimeout(go, FADE_MS);
+          }, 40);
         });
       })();
     </script>
@@ -496,19 +558,20 @@ const personSchema = {
            the best pure-CSS match we've found. */
         transition: background-color 300ms ease-in-out, color 300ms ease-in-out;
       }
-      /* Page-fade overlay: we tried the browser's native cross-document
+      /* Page-fade overlay. We tried the browser's native cross-document
          view-transition for this, twice, and both attempts produced
          real rendering bugs on WebKit (a stale-page flash, then
-         magenta streaking) once the mobile menu's masked overlay and
-         the grid's own entrance animations got involved — the native
-         feature captures whole-page screenshots and composites them in
-         ways we don't fully control. This does the same job with a
-         plain, fully-owned opacity transition instead: fade this page
-         to the background colour, then navigate for real. The
-         destination page loads fresh and plays its own entrance
-         animations (drop-in tiles, image fade-in) exactly as it always
-         has — nothing to fight with. See the click-handling script
-         further down for the other half of this. */
+         magenta streaking) — that feature captures whole-page
+         screenshots and composites them in ways we don't fully
+         control. A single-page animated fade-out (our second attempt)
+         wasn't reliable either: there was no way to guarantee the
+         cover had actually painted before navigation began, so the old
+         page could still flash through for a frame on a real device.
+         This version covers instantly (no race possible) and instead
+         does the animating on arrival: the destination page starts
+         already covered (see the pf-armed script in <head>) and fades
+         the cover away itself once ready — see the reveal script at
+         the top of <body>, and the exit-side script further down. */
       #page-fade {
         position: fixed;
         inset: 0;
@@ -516,13 +579,27 @@ const personSchema = {
         background: var(--bg);
         opacity: 0;
         pointer-events: none;
-        transition: opacity 260ms ease;
       }
       #page-fade.active {
         opacity: 1;
       }
+      /* Set on <html> by the <head> script before first paint, so this
+         page starts covered instead of flashing bare content before
+         its own reveal script has a chance to run. */
+      html.pf-armed #page-fade {
+        opacity: 1;
+      }
+      /* The actual reveal. !important guarantees this wins regardless
+         of whether pf-armed has already been removed by the time this
+         class is added (see the reveal script) — the two happen in the
+         same tick, and this is simpler to reason about than relying on
+         selector specificity to land the right way round. */
+      #page-fade.reveal {
+        opacity: 0 !important;
+        transition: opacity 320ms ease;
+      }
       @media (prefers-reduced-motion: reduce) {
-        #page-fade { transition: none; }
+        #page-fade.reveal { transition: none; }
       }
       @keyframes drop-in {
         0% {
