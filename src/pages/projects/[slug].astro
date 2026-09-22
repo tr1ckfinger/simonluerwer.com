@@ -96,36 +96,23 @@ const ogImage = cldUrl(album.cover.public_id, {
 </Base>
 
 <style>
-  /* Two-column series layout on desktop: a sticky text sidebar on the
-     left (same left inset as the rest of the page — it's just the
-     first flex child inside <main>, no extra margin) and the image
-     grid scrolling beside it. The sidebar's sticky top is the nav's
-     actual rendered height (--nav-h, measured in Base.astro) plus a
-     visual gap — without that offset a naive `top: 0` would tuck the
-     text under/behind the equally-sticky header instead of just below
-     it. Falls back to a plausible fixed value if --nav-h hasn't been
-     set yet (e.g. print, or the one frame before the measuring script
-     runs — sticky only visibly matters once scrolled, so this is not
-     a real-world flash risk).
+  /* Two-column series layout on desktop: a text sidebar on the left
+     (same left inset as the rest of the page — it's just the first
+     flex child inside <main>, no extra margin) and the image grid
+     beside it. Both columns scroll together — the sidebar is a plain
+     flex item, not pinned.
      Below 900px there's no room for a comfortable sidebar next to a
-     usable image grid, so it collapses back to the original stacked
-     layout — text above, images below, nothing sticky. */
+     usable image grid, so it collapses to the original stacked
+     layout — text above, images below. */
   .series-layout {
     display: flex;
     align-items: flex-start;
     gap: 54px;
   }
   .album-info {
-    /* 380px (was 420px). */
+    /* 380px (was 420px). Scrolls along with the image grid rather than
+       staying pinned — both columns move together. */
     flex: 0 0 380px;
-    position: sticky;
-    top: calc(var(--nav-h, 70px) + 24px);
-    /* Safety net for a long description: never let the sticky sidebar
-       grow taller than the viewport allows, so it can't visually
-       collide with the bottom edge. Scrolls internally in the rare
-       case content exceeds this. */
-    max-height: calc(100vh - var(--nav-h, 70px) - 48px);
-    overflow-y: auto;
     padding-top: 8px;
     /* Fades in on arrival (same feel as the lightbox sidebar on the
        home grid) instead of appearing instantly before the images. */
@@ -150,9 +137,6 @@ const ogImage = cldUrl(album.cover.public_id, {
       display: block;
     }
     .album-info {
-      position: static;
-      max-height: none;
-      overflow-y: visible;
       max-width: 640px;
     }
   }

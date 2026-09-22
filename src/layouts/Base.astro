@@ -602,7 +602,7 @@ const personSchema = {
         /* Full-width on desktop with 80px L/R breathing room. No
            max-width — the grid expands to fill the viewport so the
            images themselves get bigger, not the count per row. */
-        padding: 0 80px 128px;
+        padding: 0 80px 192px;
         /* Always taller than the viewport, so the imprint link (pinned
            to main's bottom edge below) is below the fold on every page
            — even short ones like about-me — and never visible without
@@ -811,7 +811,7 @@ const personSchema = {
         .nav-inner {
           padding: calc(20px + env(safe-area-inset-top)) calc(40px + env(safe-area-inset-right)) 20px calc(40px + env(safe-area-inset-left));
         }
-        main { padding: 0 40px 128px; }
+        main { padding: 0 40px 192px; }
         .site-footer { left: 40px; right: 40px; }
       }
       @media (max-width: 640px) {
@@ -827,7 +827,7 @@ const personSchema = {
           gap: 12px;
           grid-template-columns: minmax(0, 1fr) auto auto;
         }
-        main { padding: 0 16px 120px; }
+        main { padding: 0 16px 170px; }
         .site-footer { left: 16px; right: 16px; bottom: 24px; }
         .nav-left { gap: 12px; }
         .back-arrow {
