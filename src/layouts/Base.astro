@@ -238,7 +238,20 @@ const personSchema = {
           setOpen(!document.body.classList.contains('menu-open'))
         );
         menu.querySelectorAll('a').forEach((a) =>
-          a.addEventListener('click', () => setOpen(false))
+          a.addEventListener('click', () => {
+            // Close instantly (skip the ~900ms wash-out animation): a
+            // link click navigates away immediately, and the site's
+            // page-to-page crossfade (see @view-transition in the
+            // global styles) captures this page for its own transition
+            // right as navigation starts. If the menu is still mid-close
+            // at that instant, it gets captured too and visibly flashes
+            // back in while that snapshot fades out over the new page.
+            // Cutting the animation short here means there's nothing
+            // left to capture, so the hand-off to the destination page
+            // is a clean crossfade instead.
+            menu.classList.add('menu-instant-close');
+            setOpen(false);
+          })
         );
         document.addEventListener('keydown', (e) => {
           if (e.key === 'Escape') setOpen(false);
@@ -729,6 +742,13 @@ const personSchema = {
           --menu-r 900ms cubic-bezier(0.65, 0, 0.35, 1),
           opacity 700ms ease,
           visibility 0s linear 900ms;
+      }
+      /* See the link click handler above: skips the close animation
+         entirely so nothing is left for the page's own crossfade to
+         (mis)capture on the way out. */
+      .mobile-menu.menu-instant-close,
+      .mobile-menu.menu-instant-close a {
+        transition: none !important;
       }
       body.menu-open .mobile-menu {
         --menu-r: 220vmax;
