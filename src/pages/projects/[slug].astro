@@ -153,21 +153,20 @@ const ogImage = cldUrl(album.cover.public_id, {
      stretching when it has fewer items than a full row. */
   /* Desktop --row-h is ~1.2× the home-grid values (260 → 312, 220 → 264)
      so once a viewer commits to a single series the images get a touch
-     more room to breathe without dominating the layout. Gap is 3× the
-     home-grid gap (18 → 54, 10 → 30, 6 → 18) so the series view feels
-     deliberately spacious — more like an editorial spread than the
-     dense home-feed mosaic. Tablet and mobile keep the home-grid row
-     heights so small screens don't get unwieldy. */
+     more room to breathe without dominating the layout. The gap
+     between images is the same as the home grid's (18 / 10 / 6px), so
+     the two views share one rhythm. Tablet and mobile keep the
+     home-grid row heights so small screens don't get unwieldy. */
   .justified {
     padding-top: 8px;
     display: flex;
     flex-wrap: wrap;
-    gap: 40px;
+    gap: 18px;
     --row-h: 312px;
   }
   @media (max-width: 1100px) { .justified { --row-h: 264px; } }
-  @media (max-width: 900px) { .justified { --row-h: 190px; gap: 24px; } }
-  @media (max-width: 500px) { .justified { --row-h: 160px; gap: 14px; } }
+  @media (max-width: 900px) { .justified { --row-h: 190px; gap: 10px; } }
+  @media (max-width: 500px) { .justified { --row-h: 160px; gap: 6px; } }
   .justified figure {
     margin: 0;
     overflow: hidden;
@@ -209,7 +208,7 @@ const ogImage = cldUrl(album.cover.public_id, {
     .justified {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 14px;
+      gap: 6px;
     }
     .justified .filler { display: none; }
     .justified figure {

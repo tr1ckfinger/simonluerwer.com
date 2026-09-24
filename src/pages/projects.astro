@@ -19,6 +19,29 @@ const ogImage =
 
 const description =
   'Selected work by Simon Lürwer — themed series and commissioned photography from Hamburg, Germany.';
+
+// Cover title lines. In a folder name like "(ironman) hamburg" or
+// "adac (cyclassics)", the part in (parentheses) is the big line and
+// whatever is left is the small one, in the order they appear in the
+// name, with a forced line break between them. A name without
+// parentheses falls back to: first word big, the rest small.
+type TitleLine = { text: string; big: boolean };
+function titleLines(name: string): TitleLine[] {
+  const m = name.match(/^(.*?)\(([^)]*)\)(.*)$/);
+  if (!m) {
+    const [first, ...rest] = name.split(' ');
+    return [
+      { text: first, big: true },
+      ...(rest.length ? [{ text: rest.join(' '), big: false }] : []),
+    ];
+  }
+  const [, before, inner, after] = m.map((x) => x?.trim());
+  return [
+    ...(before ? [{ text: before, big: false }] : []),
+    { text: inner, big: true },
+    ...(after ? [{ text: after, big: false }] : []),
+  ];
+}
 ---
 
 <Base
@@ -38,7 +61,13 @@ const description =
           alt={project.title}
           loading="lazy"
         />
-        <span class="title">{project.title}</span>
+        <span class="title">
+          <span class="group">
+            {titleLines(project.coverTitle).map((line) => (
+              <span class={line.big ? 'big' : 'small'}>{line.text}</span>
+            ))}
+          </span>
+        </span>
       </a>
     ))}
   </section>
@@ -48,29 +77,126 @@ const description =
   )}
 </Base>
 
+<script>
+  // Sizes the cover titles. Each title is a group of lines: the (big)
+  // line — the part of the folder name that was in parentheses, serif —
+  // and the small line(s), sans, one on each side at most. The big line
+  // is sized to span the group's width. EVERY small line, on every
+  // cover, is the same fixed size (a share of the cover's width), so
+  // they all read as one system; SMALL is that share, taken from the
+  // small line on the "world triathlon championship" cover. Font size
+  // can't be derived in pure CSS for the big line because it depends
+  // on the word's own width, so measure at a reference size and scale.
+  // Re-runs on resize; waits for the serif face first, since fitting
+  // against the fallback font would give the wrong size.
+  //
+  // Groups differ in shape, so a fixed width would make some titles
+  // look much heavier than others. Instead each group gets the width
+  // that makes its box cover about the same AREA of the photo. The big
+  // line scales with the width but the small lines don't, so height =
+  // k * width + c (k, c measured at two widths), and width solves
+  // k * w² + c * w = area.
+  const AREA = 0.1; // share of the cover each title box covers
+  const SMALL = 0.0418; // small-line size as a share of the cover's width
+  // offsetWidth is layout width, unaffected by the tiles' drop-in scale
+  // animation (getBoundingClientRect would include it).
+  function fitBig(el: HTMLElement, avail: number) {
+    el.style.fontSize = '100px';
+    let size = (100 * avail) / el.offsetWidth;
+    el.style.fontSize = size + 'px';
+    // Text width isn't perfectly linear in font size (hinting, rounding
+    // at small sizes), so nudge once more against the real width.
+    size *= avail / el.offsetWidth;
+    el.style.fontSize = size + 'px';
+    el.classList.add('fit');
+  }
+  // A line's box is taller than its visible letters (room for ascenders
+  // and descenders), and by different amounts per word: "open" has no
+  // ascenders, so a big gap opened up above it compared with
+  // "cyclassics". Trim each line's box to its actual ink (measured on a
+  // canvas) so the space between lines is the same on every cover.
+  const ctx = document.createElement('canvas').getContext('2d');
+  function trim(el: HTMLElement, size: number) {
+    el.style.marginTop = el.style.marginBottom = '0px';
+    if (!ctx) return;
+    const cs = getComputedStyle(el);
+    ctx.font = `${cs.fontWeight} ${size}px ${cs.fontFamily}`;
+    const text = cs.textTransform === 'uppercase'
+      ? (el.textContent ?? '').toUpperCase()
+      : el.textContent ?? '';
+    const m = ctx.measureText(text);
+    if (m.fontBoundingBoxAscent === undefined) return;
+    // line-height is 1, so the box is `size` tall with the font's
+    // ascent+descent centred in it.
+    const baseline =
+      (size - (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent)) / 2 +
+      m.fontBoundingBoxAscent;
+    const inkTop = baseline - m.actualBoundingBoxAscent;
+    const inkBottom = baseline + m.actualBoundingBoxDescent;
+    el.style.marginTop = -inkTop + 'px';
+    el.style.marginBottom = -(size - inkBottom) + 'px';
+  }
+  function layout(group: HTMLElement, width: number, smallSize: number) {
+    const big = group.querySelector<HTMLElement>('.big');
+    if (!big) return;
+    fitBig(big, width);
+    trim(big, parseFloat(big.style.fontSize));
+    group.querySelectorAll<HTMLElement>('.small').forEach((small) => {
+      small.style.fontSize = smallSize + 'px';
+      small.classList.add('fit');
+      trim(small, smallSize);
+    });
+  }
+  function fit() {
+    document.querySelectorAll<HTMLElement>('.card').forEach((card) => {
+      const group = card.querySelector<HTMLElement>('.group');
+      if (!group) return;
+      const smallSize = card.clientWidth * SMALL;
+      layout(group, 100, smallSize);
+      const h100 = group.offsetHeight;
+      layout(group, 200, smallSize);
+      const h200 = group.offsetHeight;
+      const k = (h200 - h100) / 100;
+      const c = h100 - 100 * k;
+      const area = card.clientWidth * card.clientHeight * AREA;
+      const w = (-c + Math.sqrt(c * c + 4 * k * area)) / (2 * k);
+      // Keep the box inside sensible bounds whatever its shape.
+      const width = Math.min(
+        Math.max(w, card.clientWidth * 0.3),
+        card.clientWidth * 0.7
+      );
+      layout(group, width, smallSize);
+    });
+  }
+  const ready = Promise.race([
+    document.fonts.load('100px "Instrument Serif"').catch(() => {}),
+    new Promise((r) => setTimeout(r, 1500)),
+  ]);
+  ready.then(fit);
+  window.addEventListener('resize', fit);
+</script>
+
 <style>
-  /* Projects listing — same 4-up tile grid as the albums listing, kept
-     identical so the two ways in (series vs themed/commissioned work)
-     share one visual rhythm. Gaps mirror the inside-series spacing
-     (3× home-grid) so listing the projects feels as deliberately
-     spacious as viewing one. */
+  /* Projects listing — a tile grid whose gaps match the home grid's
+     (18 / 10 / 6px), so the listing, the home feed and the image
+     pages all share one spacing. */
   .grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 54px;
+    gap: 18px;
     padding-top: 8px;
   }
   @media (max-width: 1200px) {
     .grid { grid-template-columns: repeat(3, 1fr); }
   }
   @media (max-width: 900px) {
-    .grid { gap: 30px; }
+    .grid { gap: 10px; }
   }
   @media (max-width: 760px) {
     .grid { grid-template-columns: repeat(2, 1fr); }
   }
   @media (max-width: 500px) {
-    .grid { gap: 18px; }
+    .grid { gap: 6px; }
   }
   .card {
     position: relative;
@@ -78,6 +204,7 @@ const description =
     aspect-ratio: 4 / 5;
     overflow: hidden;
     background: var(--card-bg);
+    container-type: inline-size;
   }
   .card img {
     width: 100%;
@@ -86,43 +213,90 @@ const description =
     display: block;
     transition: filter 380ms cubic-bezier(0.4, 0, 0.2, 1);
   }
-  .card:hover img {
-    filter: brightness(var(--img-hover));
+  /* Covers are ~10% brighter than the raw photo; the hover
+     dim/brighten keeps working on top of that. */
+  .card img {
+    filter: brightness(1.1);
   }
-  /* Project name in the lower third of the cover, in Instrument Serif (self-
-     hosted, see @font-face in Base.astro). A faint dark wash over the
-     photo keeps white text legible on bright covers. */
+  .card:hover img {
+    filter: brightness(calc(1.1 * var(--img-hover)));
+  }
+  /* Project name centred in the lower half of the cover, in white:
+     the part of the name that was in (parentheses) is the big line, in
+     Instrument Serif (self-hosted, see @font-face in Base.astro), and
+     the rest is a smaller sans line above or below it — always on its
+     own line. Sizes are fitted by the script below. A faint dark wash
+     over the photo keeps the type legible. */
   .card::after {
     content: '';
     position: absolute;
     inset: 0;
-    background: rgba(0, 0, 0, 0.22);
+    /* Darker toward the bottom, where the title sits. */
+    background:
+      linear-gradient(to top, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0) 55%),
+      rgba(0, 0, 0, 0.12);
     pointer-events: none;
   }
   .title {
     position: absolute;
-    /* Sits in the lower third of the cover, centred within it, then
-       nudged up by 8% of the cover height. */
-    inset: auto 0 8% 0;
-    height: 33.333%;
+    /* The lower half of the cover; the group is centred in it. */
+    inset: 50% 0 0 0;
     z-index: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0 18px;
     text-align: center;
-    text-wrap: balance;
     color: #fff;
     font-family: 'Instrument Serif', Georgia, 'Times New Roman', serif;
     font-weight: 400;
-    font-size: clamp(20px, 2vw, 31px);
-    line-height: 1.05;
-    letter-spacing: -0.01em;
-    text-shadow: 0 1px 18px rgba(0, 0, 0, 0.35);
     pointer-events: none;
   }
-  @media (max-width: 760px) {
-    .title { font-size: 18px; padding: 0 12px; }
+  .group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    /* Lines are trimmed to their ink by the script, so this is the
+       visible space between them (a share of the cover's width, so it
+       scales with the cover). */
+    gap: 3.4cqw;
+  }
+  .big,
+  .small {
+    display: inline-block;
+    white-space: nowrap;
+    /* Rough starting sizes until the script has measured each line;
+       hidden until then so there's no visible resize. */
+    opacity: 0;
+  }
+  .big {
+    line-height: 1;
+    letter-spacing: -0.02em;
+    font-size: 22cqw;
+    /* Instrument Serif only ships a regular weight, so "bolder" is a
+       stroke in the text colour, in em so it scales with the fitted
+       size. (Synthetic bold would smear and change the glyph widths.) */
+    -webkit-text-stroke: 0.006em currentColor;
+  }
+  /* The rest of the name: sans, semibold, uppercase, at one fixed size
+     (a share of the cover's width) on every cover — the script sets it
+     precisely; the value here is the same share as a no-script
+     fallback. */
+  .small {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Helvetica Neue', Arial, sans-serif;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: -0.01em;
+    line-height: 1;
+    font-size: 4.18cqw;
+  }
+  .big.fit,
+  .small.fit {
+    opacity: 1;
+    transition: opacity 200ms ease;
+  }
+  @media (scripting: none) {
+    .big,
+    .small { opacity: 1; }
   }
   .empty {
     color: var(--muted);

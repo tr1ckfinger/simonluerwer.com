@@ -31,7 +31,12 @@ export type CldImage = {
 
 export type Album = {
   slug: string;
+  // Plain display name (parentheses removed) — for headings, page
+  // titles, alt text.
   title: string;
+  // The lowercased folder name with any (parentheses) kept, which mark
+  // the part of the name the cover shows bigger (see projects.astro).
+  coverTitle: string;
   cover: CldImage;
   images: CldImage[];
   // ISO datetime of the most recently uploaded image in this album.
@@ -56,16 +61,29 @@ const PARENT_FOLDER = 'Portfolio Projects';
 
 // Album titles are the raw folder name, lowercased, with spaces and
 // dashes/underscores all rendered as a single space. Folder "New York"
-// → "new york"; folder "street-life" → "street life".
+// → "new york"; folder "street-life" → "street life". Parentheses are
+// kept here — on the cover, the part in (parentheses) is set bigger —
+// and stripped by displayTitle for everywhere else.
 function titleFromFolder(folder: string) {
-  return folder.replace(/[-_]/g, ' ').toLowerCase();
+  return folder.replace(/[-_]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
-// URL slugs can't contain spaces, so collapse any whitespace run to a
-// single hyphen and lowercase the rest. Folder "New York" → "new-york";
-// folder "street-life" stays "street-life".
+function displayTitle(coverTitle: string) {
+  return coverTitle.replace(/[()]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+// URL slugs can't contain spaces or parentheses, so drop the
+// parentheses, collapse any whitespace run to a single hyphen and
+// lowercase the rest. Folder "New York" → "new-york"; folder
+// "(ironman) hamburg" → "ironman-hamburg" (so adding parentheses to a
+// folder name doesn't change its URL or its text file's name).
 function slugFromFolder(folder: string) {
-  return folder.trim().toLowerCase().replace(/\s+/g, '-');
+  return folder
+    .trim()
+    .toLowerCase()
+    .replace(/[()]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-');
 }
 
 async function listSubFolders(parent: string): Promise<string[]> {
@@ -169,7 +187,8 @@ async function fetchAlbums(): Promise<Album[]> {
 
     out.push({
       slug: slugFromFolder(sub),
-      title: titleFromFolder(sub),
+      title: displayTitle(titleFromFolder(sub)),
+      coverTitle: titleFromFolder(sub),
       cover,
       images,
       newestUploadedAt,
